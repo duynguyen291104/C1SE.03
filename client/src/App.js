@@ -11,6 +11,11 @@ import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 
+// Student pages
+import StudentQuizzes from './pages/StudentQuizzes';
+import StudentMaterials from './pages/StudentMaterials';
+import StudentResults from './pages/StudentResults';
+
 // Teacher pages
 import CreateSlide from './pages/CreateSlide';
 import CreateQuiz from './pages/CreateQuiz';
@@ -68,6 +73,30 @@ function App() {
             element={
               <ProtectedRoute requiredRole="student">
                 <StudentDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/quizzes"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <StudentQuizzes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/materials"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <StudentMaterials />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/results"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <StudentResults />
               </ProtectedRoute>
             }
           />
