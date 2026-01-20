@@ -1,0 +1,165 @@
+version: '3.8'
+
+services:
+  # MongoDB - Database chạy trước
+  mongo:
+    image: mongo:7.0
+    container_name: edu-mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: edu_ecosystem
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - edu-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Cho queue và cache
+  redis:
+    image: redis:7-alpine
+    container_name: edu-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - edu-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO - Object Storage cho files
+  minio:
+    image: minio/minio:latest
+    container_name: edu-minio
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: minio_password
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - edu-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API - Chờ database sẵn sàng
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: edu-server
+    restart: always
+    ports:
+      - "5001:5000"
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      MONGO_URI: mongodb://admin:admin123@mongo:27017/edu_ecosystem?authSource=admin
+      MONGODB_URI: mongodb://admin:admin123@mongo:27017/edu_ecosystem?authSource=admin
+      JWT_ACCESS_SECRET: your-super-secret-access-key-change-in-production
+      JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
+      ACCESS_EXPIRES: 15m
+      REFRESH_EXPIRES: 30d
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: minio_admin
+      MINIO_SECRET_KEY: minio_password
+      MINIO_USE_SSL: false
+      CORS_ORIGIN: http://localhost:3000
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+      - /tmp/uploads:/tmp/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - edu-network
+
+  # Worker Service - Process extraction jobs
+  worker:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: edu-worker
+    restart: always
+    command: node src/worker.js
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://admin:admin123@mongo:27017/edu_ecosystem?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: minio_admin
+      MINIO_SECRET_KEY: minio_password
+      MINIO_USE_SSL: false
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - edu-network
+
+  # Frontend React - Chờ backend sẵn sàng
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: edu-client
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:5001/api
+      WATCHPACK_POLLING: true
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    networks:
+      - edu-network
+    stdin_open: true
+    tty: true
+
+networks:
+  edu-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:
+  minio_data:

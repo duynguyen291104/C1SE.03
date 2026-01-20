@@ -1,0 +1,125 @@
+@import './CreateSlide.css';
+
+.create-quiz-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.question-item {
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.options-section {
+  margin: 15px 0;
+}
+
+.options-section label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.option-item input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.option-input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.quiz-meta {
+  display: flex;
+  gap: 15px;
+  margin: 15px 0;
+  color: #7f8c8d;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+
+.quizzes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.quiz-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.3s;
+}
+
+.quiz-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.quiz-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+  gap: 10px;
+}
+
+.quiz-card-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 18px;
+  flex: 1;
+}
+
+.quiz-card p {
+  color: #7f8c8d;
+  margin-bottom: 15px;
+  line-height: 1.5;
+}
+
+.quiz-card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 15px;
+  border-top: 1px solid #e9ecef;
+}
+
+.quiz-card-actions button {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}

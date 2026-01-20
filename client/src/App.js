@@ -1,0 +1,159 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Navbar from './components/Navbar';
+
+// Pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ChooseRole from './pages/ChooseRole';
+import StudentDashboard from './pages/StudentDashboard';
+import TeacherDashboard from './pages/TeacherDashboard';
+import AdminDashboard from './pages/AdminDashboard';
+
+// Teacher pages
+import CreateSlide from './pages/CreateSlide';
+import CreateQuiz from './pages/CreateQuiz';
+import CreateLive from './pages/CreateLive';
+import Materials from './pages/Materials';
+import LiveClassRoom from './pages/LiveClassRoom';
+import JoinLiveClass from './pages/JoinLiveClass';
+
+// Dashboard router based on roles
+const DashboardRouter = () => {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // If user has no roles, redirect to choose role
+  if (!user.roles || user.roles.length === 0) {
+    return <Navigate to="/choose-role" replace />;
+  }
+
+  // Redirect based on primary role
+  if (user.roles.includes('admin')) {
+    return <Navigate to="/admin/dashboard" replace />;
+  } else if (user.roles.includes('teacher')) {
+    return <Navigate to="/teacher/dashboard" replace />;
+  } else {
+    return <Navigate to="/student/dashboard" replace />;
+  }
+};
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Navbar />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+
+          {/* Protected routes */}
+          <Route
+            path="/choose-role"
+            element={
+              <ProtectedRoute>
+                <ChooseRole />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Student routes */}
+          <Route
+            path="/student/dashboard"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <StudentDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Teacher routes */}
+          <Route
+            path="/teacher/dashboard"
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <TeacherDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/create-slide"
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <CreateSlide />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/create-quiz"
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <CreateQuiz />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/create-live"
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <CreateLive />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/materials"
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <Materials />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/live-room/:liveClassId"
+            element={
+              <ProtectedRoute requiredRole="teacher">
+                <LiveClassRoom />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Student can join live class */}
+          <Route
+            path="/join-live/:roomId"
+            element={
+              <ProtectedRoute>
+                <JoinLiveClass />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin routes */}
+          <Route
+            path="/admin/dashboard"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Dashboard router */}
+          <Route path="/dashboard" element={<DashboardRouter />} />
+
+          {/* Default redirect */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+          {/* 404 */}
+          <Route path="*" element={<div className="container"><h1>404 - Page Not Found</h1></div>} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+export default App;
