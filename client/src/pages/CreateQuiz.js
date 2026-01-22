@@ -18,6 +18,8 @@ const CreateQuiz = () => {
   const [savedQuizzes, setSavedQuizzes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [editMode, setEditMode] = useState(false);
+  const [editingQuizId, setEditingQuizId] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
@@ -48,6 +50,56 @@ const CreateQuiz = () => {
         setTimeout(() => navigate('/login'), 2000);
       }
     }
+  };
+
+  const loadQuizForEdit = async (quizId) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(`${API_URL}/quizzes/${quizId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const quiz = response.data.data;
+      
+      // Populate form data
+      setFormData({
+        title: quiz.title || '',
+        description: quiz.description || '',
+        instructions: quiz.instructions || '',
+        duration: quiz.duration || 30,
+        passingScore: quiz.passingScore || 60,
+        tags: quiz.tags?.join(', ') || ''
+      });
+      
+      // Populate questions
+      setQuestions(quiz.questions || []);
+      
+      // Set edit mode
+      setEditMode(true);
+      setEditingQuizId(quizId);
+      
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      setMessage({ text: 'Đang chỉnh sửa quiz', type: 'success' });
+    } catch (error) {
+      setMessage({ text: 'Lỗi khi tải quiz để chỉnh sửa', type: 'error' });
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditMode(false);
+    setEditingQuizId(null);
+    setFormData({
+      title: '',
+      description: '',
+      instructions: '',
+      duration: 30,
+      passingScore: 60,
+      tags: ''
+    });
+    setQuestions([]);
+    setMessage({ text: '', type: '' });
   };
 
   const addQuestion = () => {
@@ -115,13 +167,23 @@ const CreateQuiz = () => {
         }
       };
 
-      await axios.post(`${API_URL}/quizzes`, payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      setMessage({ text: 'Tạo quiz thành công!', type: 'success' });
+      if (editMode && editingQuizId) {
+        // Update existing quiz
+        await axios.put(`${API_URL}/quizzes/${editingQuizId}`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setMessage({ text: 'Cập nhật quiz thành công!', type: 'success' });
+      } else {
+        // Create new quiz
+        await axios.post(`${API_URL}/quizzes`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setMessage({ text: 'Tạo quiz thành công!', type: 'success' });
+      }
       
       // Reset
+      setEditMode(false);
+      setEditingQuizId(null);
       setFormData({
         title: '',
         description: '',
@@ -133,7 +195,7 @@ const CreateQuiz = () => {
       setQuestions([]);
       fetchQuizzes();
     } catch (error) {
-      setMessage({ text: error.response?.data?.message || 'Lỗi khi tạo quiz', type: 'error' });
+      setMessage({ text: error.response?.data?.message || `Lỗi khi ${editMode ? 'cập nhật' : 'tạo'} quiz`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -170,8 +232,8 @@ const CreateQuiz = () => {
   return (
     <div className="create-quiz-container">
       <div className="create-quiz-header">
-        <h1>📝 Tạo Bài Kiểm Tra / Quiz</h1>
-        <p>Tạo bài kiểm tra và đánh giá kiến thức học sinh</p>
+        <h1>{editMode ? '✏️ Chỉnh Sửa Bài Kiểm Tra / Quiz' : '📝 Tạo Bài Kiểm Tra / Quiz'}</h1>
+        <p>{editMode ? 'Chỉnh sửa và cập nhật bài kiểm tra' : 'Tạo bài kiểm tra và đánh giá kiến thức học sinh'}</p>
       </div>
 
       {message.text && (
@@ -348,8 +410,13 @@ const CreateQuiz = () => {
           </div>
 
           <div className="form-actions">
+            {editMode && (
+              <button type="button" onClick={cancelEdit} className="btn-secondary" disabled={loading}>
+                ❌ Hủy Chỉnh Sửa
+              </button>
+            )}
             <button type="submit" disabled={loading} className="btn-primary">
-              {loading ? 'Đang lưu...' : '💾 Lưu Quiz'}
+              {loading ? 'Đang lưu...' : (editMode ? '💾 Cập Nhật Quiz' : '💾 Lưu Quiz')}
             </button>
           </div>
         </form>
@@ -380,7 +447,7 @@ const CreateQuiz = () => {
                 </div>
 
                 <div className="quiz-card-actions">
-                  <button className="btn-edit">✏️ Sửa</button>
+                  <button onClick={() => loadQuizForEdit(quiz._id)} className="btn-edit">✏️ Sửa</button>
                   {quiz.status === 'draft' && (
                     <button onClick={() => publishQuiz(quiz._id)} className="btn-publish">
                       📢 Xuất bản
