@@ -16,6 +16,8 @@ const StudentQuizzes = () => {
   const [showResult, setShowResult] = useState(false);
   const [quizResult, setQuizResult] = useState(null);
   const [previousAttempts, setPreviousAttempts] = useState([]);
+  const [showReview, setShowReview] = useState(false);
+  const [reviewData, setReviewData] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
@@ -153,7 +155,201 @@ const StudentQuizzes = () => {
     setStartTime(null);
     setShowResult(false);
     setQuizResult(null);
+    setShowReview(false);
+    setReviewData(null);
   };
+
+  const viewQuizReview = async (resultId) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(`${API_URL}/student/quizzes/results/${resultId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setReviewData(response.data.data);
+      setShowReview(true);
+      setShowResult(false);
+      setSelectedQuiz(null);
+    } catch (error) {
+      setMessage({ text: 'Không thể tải chi tiết bài làm', type: 'error' });
+    }
+  };
+
+  // Show review screen
+  if (showReview && reviewData) {
+    const quiz = reviewData.quizId;
+    
+    return (
+      <div className="student-quizzes-container">
+        <div className="review-screen">
+          <div className="review-header">
+            <h1>📋 Xem lại bài làm</h1>
+            <button onClick={backToQuizList} className="btn-exit">❌ Đóng</button>
+          </div>
+
+          <div className="review-info">
+            <h2>{quiz.title}</h2>
+            <div className="review-stats">
+              <div className="stat-box">
+                <span className="stat-label">Điểm số</span>
+                <span className="stat-value">{reviewData.score}%</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Đúng</span>
+                <span className="stat-value correct">{reviewData.answers.filter(a => a.isCorrect).length}/{reviewData.answers.length}</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Sai</span>
+                <span className="stat-value incorrect">{reviewData.answers.filter(a => !a.isCorrect).length}/{reviewData.answers.length}</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Điểm đạt</span>
+                <span className="stat-value">{reviewData.earnedPoints}/{reviewData.totalPoints}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="review-questions">
+            {quiz.questions.map((question, idx) => {
+              const studentAnswer = reviewData.answers.find(a => a.questionId.toString() === question._id.toString());
+              const isCorrect = studentAnswer?.isCorrect || false;
+              
+              return (
+                <div key={question._id} className={`review-question-card ${isCorrect ? 'correct' : 'incorrect'}`}>
+                  <div className="review-question-header">
+                    <div>
+                      <span className="question-number">Câu {idx + 1}</span>
+                      <span className={`result-badge ${isCorrect ? 'correct' : 'incorrect'}`}>
+                        {isCorrect ? '✓ Đúng' : '✗ Sai'}
+                      </span>
+                    </div>
+                    <span className="question-points">
+                      {studentAnswer?.pointsEarned || 0}/{question.points || 1} điểm
+                    </span>
+                  </div>
+
+                  <h3 className="review-question-text">{question.question}</h3>
+
+                  {question.type === 'multiple-choice' && (
+                    <div className="review-options">
+                      {question.options.map((option, oIdx) => {
+                        const isStudentAnswer = studentAnswer?.selectedAnswer === option._id;
+                        const isCorrectAnswer = option.isCorrect;
+                        
+                        // Chỉ hiển thị đáp án đúng nếu câu trả lời đúng
+                        let optionClass = 'review-option';
+                        
+                        if (isCorrect && isCorrectAnswer) {
+                          // Câu đúng: Hiển thị đáp án đúng
+                          optionClass += ' correct-answer';
+                        }
+                        
+                        if (isStudentAnswer) {
+                          if (isCorrectAnswer) {
+                            // Học sinh chọn đúng
+                            optionClass += ' student-correct';
+                          } else {
+                            // Học sinh chọn sai - chỉ tô đỏ
+                            optionClass += ' wrong-answer';
+                          }
+                        }
+                        
+                        return (
+                          <div key={option._id} className={optionClass}>
+                            <span className="option-letter">{String.fromCharCode(65 + oIdx)}</span>
+                            <span className="option-text">{option.text}</span>
+                            {isStudentAnswer && (
+                              <span className={`option-badge ${isCorrectAnswer ? 'correct' : 'wrong'}`}>
+                                Bạn chọn
+                              </span>
+                            )}
+                            {/* Chỉ hiển thị đáp án đúng nếu học sinh trả lời đúng câu này */}
+                            {isCorrect && isCorrectAnswer && (
+                              <span className="option-badge correct">Đáp án đúng</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {question.type === 'true-false' && (
+                    <div className="review-options">
+                      {/* Option Đúng */}
+                      <div className={`review-option 
+                        ${isCorrect && question.correctAnswer === true ? 'correct-answer' : ''} 
+                        ${studentAnswer?.selectedAnswer === true && question.correctAnswer !== true ? 'wrong-answer' : ''}
+                        ${studentAnswer?.selectedAnswer === true && question.correctAnswer === true ? 'student-correct' : ''}`}>
+                        <span className="option-text">✅ Đúng</span>
+                        {studentAnswer?.selectedAnswer === true && (
+                          <span className={`option-badge ${question.correctAnswer === true ? 'correct' : 'wrong'}`}>
+                            Bạn chọn
+                          </span>
+                        )}
+                        {/* Chỉ hiển thị đáp án đúng nếu học sinh trả lời đúng câu này */}
+                        {isCorrect && question.correctAnswer === true && (
+                          <span className="option-badge correct">Đáp án đúng</span>
+                        )}
+                      </div>
+                      
+                      {/* Option Sai */}
+                      <div className={`review-option 
+                        ${isCorrect && question.correctAnswer === false ? 'correct-answer' : ''} 
+                        ${studentAnswer?.selectedAnswer === false && question.correctAnswer !== false ? 'wrong-answer' : ''}
+                        ${studentAnswer?.selectedAnswer === false && question.correctAnswer === false ? 'student-correct' : ''}`}>
+                        <span className="option-text">❌ Sai</span>
+                        {studentAnswer?.selectedAnswer === false && (
+                          <span className={`option-badge ${question.correctAnswer === false ? 'correct' : 'wrong'}`}>
+                            Bạn chọn
+                          </span>
+                        )}
+                        {/* Chỉ hiển thị đáp án đúng nếu học sinh trả lời đúng câu này */}
+                        {isCorrect && question.correctAnswer === false && (
+                          <span className="option-badge correct">Đáp án đúng</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chỉ hiển thị giải thích nếu câu trả lời đúng */}
+                  {isCorrect && question.explanation && (
+                    <div className="explanation-box">
+                      <strong>💡 Giải thích:</strong>
+                      <p>{question.explanation}</p>
+                    </div>
+                  )}
+
+                  {/* Thông báo cho câu sai */}
+                  {!isCorrect && (
+                    <div className="wrong-answer-hint">
+                      <p>❌ Câu trả lời của bạn chưa chính xác. Hãy làm lại bài để tìm đáp án đúng!</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="review-notice">
+            <p>💡 <strong>Lưu ý:</strong> Chỉ những câu trả lời đúng mới hiển thị đáp án chính xác. Nếu muốn biết đáp án của câu sai, hãy làm lại bài kiểm tra cho đến khi trả lời đúng.</p>
+          </div>
+
+          <div className="review-actions">
+            <button onClick={() => {
+              const quiz = reviewData.quizId;
+              setShowReview(false);
+              startQuiz(quiz);
+            }} className="btn btn-warning">
+              🔄 Làm lại để tìm đáp án
+            </button>
+            <button onClick={backToQuizList} className="btn btn-primary">
+              📚 Quay lại danh sách
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show result screen
   if (showResult && quizResult) {
@@ -226,6 +422,9 @@ const StudentQuizzes = () => {
           </div>
 
           <div className="result-actions">
+            <button onClick={() => viewQuizReview(quizResult.resultId)} className="btn btn-info">
+              📋 Xem chi tiết bài làm
+            </button>
             {!isPassed && (
               <button onClick={() => startQuiz(selectedQuiz)} className="btn btn-warning">
                 🔄 Làm lại để luyện tập
@@ -431,10 +630,22 @@ const StudentQuizzes = () => {
                   {quiz.hasAttempted ? (
                     <>
                       <button 
+                        onClick={() => {
+                          const resultId = quiz.studentResult?._id;
+                          if (resultId) {
+                            viewQuizReview(resultId);
+                          }
+                        }}
+                        className="btn btn-info"
+                        disabled={!quiz.studentResult?._id}
+                      >
+                        📋 Xem chi tiết
+                      </button>
+                      <button 
                         onClick={() => startQuiz(quiz)} 
                         className="btn btn-secondary"
                       >
-                        🔄 Làm lại (Luyện tập)
+                        🔄 Làm lại
                       </button>
                     </>
                   ) : (

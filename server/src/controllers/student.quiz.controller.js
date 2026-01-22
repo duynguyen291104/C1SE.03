@@ -24,14 +24,19 @@ exports.getPublishedQuizzes = async (req, res) => {
       quizId: { $in: quizIds },
       studentId: req.user._id,
       isFirstAttempt: true
-    }).select('quizId score passed attemptNumber');
+    }).select('quizId score passed attemptNumber _id');
 
     // Map results to quizzes
     const quizzesWithResults = quizzes.map(quiz => {
       const result = results.find(r => r.quizId.toString() === quiz._id.toString());
       return {
         ...quiz.toObject(),
-        studentResult: result || null,
+        studentResult: result ? {
+          _id: result._id,
+          score: result.score,
+          passed: result.passed,
+          attemptNumber: result.attemptNumber
+        } : null,
         hasAttempted: !!result
       };
     });
