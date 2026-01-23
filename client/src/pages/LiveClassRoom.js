@@ -20,7 +20,6 @@ const LiveClassRoom = () => {
   const [isTeacher, setIsTeacher] = useState(false);
   const [roomId, setRoomId] = useState('');
   const [joinToken, setJoinToken] = useState('');
-  const [pinnedVideoUserId, setPinnedVideoUserId] = useState(null);
   
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
@@ -43,8 +42,10 @@ const LiveClassRoom = () => {
     messages: webrtcMessages,
     questions: webrtcQuestions,
     roomData: webrtcRoomData,
+    pinnedVideoUserId,
     pinMessage,
     unpinMessage,
+    pinVideo,
     cleanup
   } = useWebRTC(joinToken);
 
@@ -376,9 +377,7 @@ const LiveClassRoom = () => {
               isCameraOn={isCameraOn}
               isMicOn={isMicOn}
               pinnedUserId={pinnedVideoUserId}
-              onPinVideo={(userId) => {
-                setPinnedVideoUserId(userId);
-              }}
+              onPinVideo={pinVideo}
             />
             
             {/* Video Controls */}

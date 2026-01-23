@@ -24,6 +24,7 @@ const useWebRTC = (joinToken, iceServers = []) => {
   // Communication states
   const [messages, setMessages] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [pinnedVideoUserId, setPinnedVideoUserId] = useState(null);
   
   // Store peer connections: userId -> RTCPeerConnection
   const peerConnections = useRef(new Map());
@@ -172,6 +173,17 @@ const useWebRTC = (joinToken, iceServers = []) => {
         ...m,
         isPinned: false
       })));
+    });
+
+    // Pinned video events
+    newSocket.on('video:pinned', ({ userId }) => {
+      console.log('📌 Video pinned:', userId);
+      setPinnedVideoUserId(userId);
+    });
+
+    newSocket.on('video:unpinned', () => {
+      console.log('📌 Video unpinned');
+      setPinnedVideoUserId(null);
     });
 
     newSocket.on('hand:raised', ({ userId, userName }) => {
@@ -511,6 +523,14 @@ const useWebRTC = (joinToken, iceServers = []) => {
     socketRef.current?.emit('chat:unpin-message');
   }, []);
 
+  const pinVideo = useCallback((userId) => {
+    if (userId) {
+      socketRef.current?.emit('video:pin', { userId });
+    } else {
+      socketRef.current?.emit('video:unpin');
+    }
+  }, []);
+
   // ============ Cleanup ============
   const cleanup = useCallback(() => {
     // Stop all tracks
@@ -548,6 +568,7 @@ const useWebRTC = (joinToken, iceServers = []) => {
     // Communication states
     messages,
     questions,
+    pinnedVideoUserId,
     
     // Media controls
     startLocalStream,
@@ -563,6 +584,7 @@ const useWebRTC = (joinToken, iceServers = []) => {
     lowerHand,
     pinMessage,
     unpinMessage,
+    pinVideo,
     
     // Cleanup
     cleanup,

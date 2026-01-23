@@ -438,6 +438,39 @@ const initializeLiveClassSocket = (io) => {
       }
     });
 
+    // ==================== PIN VIDEO ====================
+
+    socket.on('video:pin', ({ userId }) => {
+      try {
+        if (!socket.currentRoom) return;
+        
+        // Broadcast to all users in room (including sender for confirmation)
+        liveNs.to(socket.currentRoom).emit('video:pinned', { 
+          userId,
+          pinnedBy: socket.user._id 
+        });
+        
+        console.log(`📌 Video pinned: ${userId} by ${socket.user.fullName}`);
+      } catch (error) {
+        console.error('Error pinning video:', error);
+      }
+    });
+
+    socket.on('video:unpin', () => {
+      try {
+        if (!socket.currentRoom) return;
+        
+        // Broadcast to all users in room
+        liveNs.to(socket.currentRoom).emit('video:unpinned', {
+          unpinnedBy: socket.user._id
+        });
+        
+        console.log(`📌 Video unpinned by ${socket.user.fullName}`);
+      } catch (error) {
+        console.error('Error unpinning video:', error);
+      }
+    });
+
     // ==================== TEACHER CONTROLS ====================
 
     socket.on('moderation:mute-participant', async ({ targetUserId }) => {
