@@ -38,9 +38,24 @@ exports.getAvailableLiveClasses = async (req, res) => {
     const total = await LiveClass.countDocuments(query);
 
     // Add participant count and check if current user joined
-    const enrichedClasses = liveClasses.map(liveClass => {
+    const presenceManager = getPresenceManager();
+    const enrichedClasses = await Promise.all(liveClasses.map(async (liveClass) => {
       const classObj = liveClass.toObject();
-      classObj.participantCount = liveClass.participants.length;
+      
+      // Get current online participants from Redis (for live classes)
+      if (liveClass.status === 'live' && liveClass.roomId) {
+        const onlineMembers = await presenceManager.getRoomMembers(liveClass.roomId);
+        classObj.currentParticipants = onlineMembers.length; // Số người đang online hiện tại
+      } else {
+        classObj.currentParticipants = 0;
+      }
+      
+      // Total visits count (số lượt truy cập)
+      classObj.totalVisits = liveClass.participants.length;
+      
+      // For backward compatibility
+      classObj.participantCount = classObj.currentParticipants;
+      
       classObj.hasJoined = liveClass.participants.some(
         p => p.userId.toString() === req.user._id.toString() && !p.leftAt
       );
@@ -49,7 +64,7 @@ exports.getAvailableLiveClasses = async (req, res) => {
       delete classObj.participants;
       
       return classObj;
-    });
+    }));
 
     res.json({
       success: true,
@@ -87,7 +102,20 @@ exports.getLiveClassDetails = async (req, res) => {
     }
 
     const classObj = liveClass.toObject();
-    classObj.participantCount = liveClass.participants.length;
+    
+    // Get current online participants from Redis (for live classes)
+    const presenceManager = getPresenceManager();
+    if (liveClass.status === 'live' && liveClass.roomId) {
+      const onlineMembers = await presenceManager.getRoomMembers(liveClass.roomId);
+      classObj.currentParticipants = onlineMembers.length; // Số người đang online hiện tại
+    } else {
+      classObj.currentParticipants = 0;
+    }
+    
+    // Total visits count
+    classObj.totalVisits = liveClass.participants.length;
+    classObj.participantCount = classObj.currentParticipants; // For backward compatibility
+    
     classObj.hasJoined = liveClass.participants.some(
       p => p.userId.toString() === req.user._id.toString() && !p.leftAt
     );

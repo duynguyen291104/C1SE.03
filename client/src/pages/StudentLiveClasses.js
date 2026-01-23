@@ -170,10 +170,13 @@ const StudentLiveClasses = () => {
                           </span>
                         </div>
                         
-                        <div className="info-item">
+                        <div className="info-item" title={`Tổng lượt truy cập: ${liveClass.totalVisits || 0}`}>
                           <span className="info-icon">👥</span>
                           <span className="info-text">
-                            {liveClass.participantCount}/{liveClass.maxParticipants || '∞'} người
+                            {isLive 
+                              ? `${liveClass.currentParticipants || 0} người đang online` 
+                              : `${liveClass.participantCount || 0}/${liveClass.maxParticipants || '∞'} người`
+                            }
                           </span>
                         </div>
                       </div>
