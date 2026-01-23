@@ -123,12 +123,6 @@ const VideoGrid = ({
           ))
         }
       </div>
-    </div>
-  );
-};
-          isLocal={false}
-        />
-      ))}
 
       {/* Placeholder if no video */}
       {!localStream && totalVideos === 0 && (
