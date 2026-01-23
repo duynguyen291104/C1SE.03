@@ -98,6 +98,31 @@ const useWebRTC = (joinToken, iceServers = []) => {
       await handleIceCandidate(fromUserId, candidate);
     });
 
+    // Media state changes from other users
+    newSocket.on('media:user-camera-changed', ({ userId, enabled }) => {
+      console.log(`📷 ${userId} camera: ${enabled ? 'ON' : 'OFF'}`);
+      setRemoteStreams(prev => {
+        const newMap = new Map(prev);
+        const user = newMap.get(userId);
+        if (user) {
+          newMap.set(userId, { ...user, cameraEnabled: enabled });
+        }
+        return newMap;
+      });
+    });
+
+    newSocket.on('media:user-mic-changed', ({ userId, enabled }) => {
+      console.log(`🎤 ${userId} mic: ${enabled ? 'ON' : 'OFF'}`);
+      setRemoteStreams(prev => {
+        const newMap = new Map(prev);
+        const user = newMap.get(userId);
+        if (user) {
+          newMap.set(userId, { ...user, micEnabled: enabled });
+        }
+        return newMap;
+      });
+    });
+
     // Chat & Q&A events
     newSocket.on('chat:message', (message) => {
       console.log('💬 New message:', message);
@@ -116,6 +141,23 @@ const useWebRTC = (joinToken, iceServers = []) => {
           ? { ...q, answer, isAnswered: true, answeredAt }
           : q
       ));
+    });
+    
+    // Pinned message event
+    newSocket.on('chat:message-pinned', ({ messageId }) => {
+      console.log('📌 Message pinned:', messageId);
+      setMessages(prev => prev.map(m => ({
+        ...m,
+        isPinned: m._id === messageId
+      })));
+    });
+
+    newSocket.on('chat:message-unpinned', () => {
+      console.log('📌 Message unpinned');
+      setMessages(prev => prev.map(m => ({
+        ...m,
+        isPinned: false
+      })));
     });
 
     newSocket.on('hand:raised', ({ userId, userName }) => {
@@ -445,6 +487,14 @@ const useWebRTC = (joinToken, iceServers = []) => {
     socketRef.current?.emit('hand:lower');
   }, []);
 
+  const pinMessage = useCallback((messageId) => {
+    socketRef.current?.emit('chat:pin-message', { messageId });
+  }, []);
+
+  const unpinMessage = useCallback(() => {
+    socketRef.current?.emit('chat:unpin-message');
+  }, []);
+
   // ============ Cleanup ============
   const cleanup = useCallback(() => {
     // Stop all tracks
@@ -495,6 +545,8 @@ const useWebRTC = (joinToken, iceServers = []) => {
     askQuestion,
     raiseHand,
     lowerHand,
+    pinMessage,
+    unpinMessage,
     
     // Cleanup
     cleanup,

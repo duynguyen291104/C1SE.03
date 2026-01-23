@@ -20,6 +20,7 @@ const LiveClassRoom = () => {
   const [isTeacher, setIsTeacher] = useState(false);
   const [roomId, setRoomId] = useState('');
   const [joinToken, setJoinToken] = useState('');
+  const [pinnedVideoUserId, setPinnedVideoUserId] = useState(null);
   
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
@@ -42,6 +43,8 @@ const LiveClassRoom = () => {
     messages: webrtcMessages,
     questions: webrtcQuestions,
     roomData: webrtcRoomData,
+    pinMessage,
+    unpinMessage,
     cleanup
   } = useWebRTC(joinToken);
 
@@ -369,11 +372,12 @@ const LiveClassRoom = () => {
             <VideoGrid
               localStream={localStream}
               remoteStreams={remoteStreams}
-              localUser={{
-                id: 'local',
-                name: 'Bạn',
-                isMicOn,
-                isCameraOn
+              localUserName={webrtcRoomData?.user?.fullName || 'You'}
+              isCameraOn={isCameraOn}
+              isMicOn={isMicOn}
+              pinnedUserId={pinnedVideoUserId}
+              onPinVideo={(userId) => {
+                setPinnedVideoUserId(userId);
               }}
             />
             
@@ -413,11 +417,34 @@ const LiveClassRoom = () => {
           {liveClass.settings.allowChat && (
             <div className="chat-area">
               <h3>💬 Chat</h3>
+              
+              {/* Pinned Message Banner */}
+              {webrtcMessages.find(m => m.isPinned) && (
+                <div className="pinned-message-banner">
+                  <div className="pinned-header">
+                    <span>📌 Tin nhắn đã ghim</span>
+                    {isTeacher && (
+                      <button 
+                        className="unpin-btn"
+                        onClick={() => unpinMessage()}
+                        title="Bỏ ghim"
+                      >
+                        ✖
+                      </button>
+                    )}
+                  </div>
+                  <div className="pinned-content">
+                    <strong>{webrtcMessages.find(m => m.isPinned)?.userName}:</strong>{' '}
+                    {webrtcMessages.find(m => m.isPinned)?.message}
+                  </div>
+                </div>
+              )}
+              
               <div className="messages-container">
                 {webrtcMessages.map((msg, index) => (
                   <div 
                     key={msg._id || index} 
-                    className={`message ${msg.isSystem ? 'system-message' : ''} ${msg.userRole === 'teacher' ? 'teacher-message' : ''}`}
+                    className={`message ${msg.isSystem ? 'system-message' : ''} ${msg.userRole === 'teacher' ? 'teacher-message' : ''} ${msg.isPinned ? 'pinned-msg' : ''}`}
                   >
                     {!msg.isSystem && (
                       <div className="message-header">
@@ -425,6 +452,15 @@ const LiveClassRoom = () => {
                         <span className="message-time">
                           {new Date(msg.timestamp).toLocaleTimeString()}
                         </span>
+                        {isTeacher && !msg.isPinned && (
+                          <button 
+                            className="pin-msg-btn"
+                            onClick={() => pinMessage(msg._id)}
+                            title="Ghim tin nhắn"
+                          >
+                            📌
+                          </button>
+                        )}
                       </div>
                     )}
                     <div className="message-content">{msg.message}</div>

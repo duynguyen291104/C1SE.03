@@ -128,6 +128,10 @@ const liveClassSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  pinnedMessageId: {
+    type: String,
+    default: null
+  },
   tags: [String]
 }, {
   timestamps: true

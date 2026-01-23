@@ -393,6 +393,51 @@ const initializeLiveClassSocket = (io) => {
       }
     });
 
+    // ==================== PIN MESSAGE ====================
+
+    socket.on('chat:pin-message', async ({ messageId }) => {
+      try {
+        if (!socket.currentRoom) return;
+
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        // Only teacher can pin messages
+        if (socket.user._id.toString() !== liveClass.teacherId.toString()) {
+          return socket.emit('error', { message: 'Only teacher can pin messages' });
+        }
+
+        // Set pinned message
+        liveClass.pinnedMessageId = messageId;
+        await liveClass.save();
+
+        liveNs.to(socket.currentRoom).emit('chat:message-pinned', { messageId });
+        console.log('📌 Message pinned:', messageId);
+      } catch (error) {
+        console.error('Error pinning message:', error);
+      }
+    });
+
+    socket.on('chat:unpin-message', async () => {
+      try {
+        if (!socket.currentRoom) return;
+
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        // Only teacher can unpin
+        if (socket.user._id.toString() !== liveClass.teacherId.toString()) {
+          return socket.emit('error', { message: 'Only teacher can unpin messages' });
+        }
+
+        liveClass.pinnedMessageId = null;
+        await liveClass.save();
+
+        liveNs.to(socket.currentRoom).emit('chat:message-unpinned');
+        console.log('📌 Message unpinned');
+      } catch (error) {
+        console.error('Error unpinning message:', error);
+      }
+    });
+
     // ==================== TEACHER CONTROLS ====================
 
     socket.on('moderation:mute-participant', async ({ targetUserId }) => {

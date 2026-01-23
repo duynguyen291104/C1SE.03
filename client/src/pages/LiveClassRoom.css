@@ -346,6 +346,7 @@
 .message-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 0.25rem;
   font-size: 0.75rem;
 }
@@ -357,6 +358,64 @@
 
 .message-time {
   color: #6c757d;
+}
+
+.pin-msg-btn {
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  opacity: 0.5;
+  transition: all 0.2s;
+}
+
+.pin-msg-btn:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.message.pinned-msg {
+  background: #d1ecf1;
+  border-left: 3px solid #17a2b8;
+}
+
+.pinned-message-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.pinned-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.unpin-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 14px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.unpin-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.pinned-content {
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .message-content {
