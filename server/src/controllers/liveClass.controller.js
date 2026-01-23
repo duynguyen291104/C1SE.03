@@ -1,6 +1,7 @@
 const LiveClass = require('../models/LiveClass');
 const AuditLog = require('../models/AuditLog');
 const crypto = require('crypto');
+const { getPresenceManager } = require('../services/redisPresence');
 
 // Create new live class
 exports.createLiveClass = async (req, res) => {
@@ -16,6 +17,24 @@ exports.createLiveClass = async (req, res) => {
       materials,
       tags
     } = req.body;
+
+    // Check if teacher already has an active live class
+    const activeLiveClass = await LiveClass.findOne({
+      teacherId: req.user._id,
+      status: 'live'
+    });
+
+    if (activeLiveClass) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn đã có một lớp học đang diễn ra. Vui lòng kết thúc lớp hiện tại trước khi tạo lớp mới.',
+        existingClass: {
+          _id: activeLiveClass._id,
+          title: activeLiveClass.title,
+          roomId: activeLiveClass.roomId
+        }
+      });
+    }
 
     // Validate dates
     const start = new Date(scheduledStart);
@@ -95,9 +114,34 @@ exports.getLiveClasses = async (req, res) => {
 
     const total = await LiveClass.countDocuments(query);
 
+    // Enrich each live class with unique participant count and current online count
+    const presenceManager = getPresenceManager();
+    const enrichedClasses = await Promise.all(liveClasses.map(async (liveClass) => {
+      const classObj = liveClass.toObject();
+      
+      // Unique participants (distinct userIds who have ever joined)
+      const uniqueUserIds = new Set(liveClass.participants.map(p => p.userId._id.toString()));
+      classObj.uniqueParticipants = uniqueUserIds.size;
+      
+      // Current online (only for live classes)
+      if (liveClass.status === 'live' && liveClass.roomId) {
+        try {
+          const onlineMembers = await presenceManager.getRoomMembers(liveClass.roomId);
+          classObj.currentOnline = onlineMembers.length;
+        } catch (err) {
+          console.error('Error getting online members:', err);
+          classObj.currentOnline = 0;
+        }
+      } else {
+        classObj.currentOnline = 0;
+      }
+      
+      return classObj;
+    }));
+
     res.json({
       success: true,
-      data: liveClasses,
+      data: enrichedClasses,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

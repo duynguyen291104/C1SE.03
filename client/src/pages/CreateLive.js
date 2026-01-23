@@ -365,7 +365,14 @@ const CreateLive = () => {
                     <div>⏰ Bắt đầu: {formatDateTime(liveClass.scheduledStart)}</div>
                     <div>🏁 Kết thúc: {formatDateTime(liveClass.scheduledEnd)}</div>
                     <div>👥 Tối đa: {liveClass.maxParticipants} người</div>
-                    <div>📊 Đã tham gia: {liveClass.participants?.length || 0} người</div>
+                    <div>
+                      📊 Đã tham gia: {liveClass.uniqueParticipants || 0} người
+                      {liveClass.status === 'live' && liveClass.currentOnline > 0 && (
+                        <span style={{ color: '#4CAF50', marginLeft: '8px' }}>
+                          (🟢 {liveClass.currentOnline} đang online)
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {liveClass.roomId && (
