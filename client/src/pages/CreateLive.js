@@ -67,29 +67,37 @@ const CreateLive = () => {
 
     try {
       const token = localStorage.getItem('accessToken');
-      await axios.post(`${API_URL}/live-classes`, formData, {
+      
+      // Tạo lớp học
+      const createResponse = await axios.post(`${API_URL}/live-classes`, formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      setMessage({ text: 'Tạo lớp học trực tuyến thành công!', type: 'success' });
-      setFormData({
-        title: '',
-        description: '',
-        scheduledStart: '',
-        scheduledEnd: '',
-        maxParticipants: 100,
-        settings: {
-          allowChat: true,
-          allowQuestions: true,
-          recordSession: false,
-          waitingRoom: false,
-          muteOnEntry: true
-        }
+      
+      const newClass = createResponse.data.data;
+      
+      setMessage({ text: 'Tạo lớp học thành công! Đang bắt đầu lớp...', type: 'success' });
+      
+      // Tự động start class
+      await axios.post(`${API_URL}/live-classes/${newClass._id}/start`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      fetchLiveClasses();
+      
+      // Join để lấy joinToken
+      const joinResponse = await axios.post(
+        `${API_URL}/student/live-classes/${newClass._id}/join`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const joinToken = joinResponse.data.data.joinToken;
+      
+      // Navigate vào phòng với joinToken
+      navigate(`/live-room/${newClass._id}`, {
+        state: { joinToken }
+      });
+      
     } catch (error) {
       setMessage({ text: error.response?.data?.message || 'Lỗi khi tạo lớp học', type: 'error' });
-    } finally {
       setLoading(false);
     }
   };
@@ -97,11 +105,26 @@ const CreateLive = () => {
   const startClass = async (id) => {
     try {
       const token = localStorage.getItem('accessToken');
+      
+      // Start class
       await axios.post(`${API_URL}/live-classes/${id}/start`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setMessage({ text: 'Bắt đầu lớp học!', type: 'success' });
-      fetchLiveClasses();
+      
+      // Join để lấy joinToken
+      const joinResponse = await axios.post(
+        `${API_URL}/student/live-classes/${id}/join`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const joinToken = joinResponse.data.data.joinToken;
+      
+      // Navigate vào phòng
+      navigate(`/live-room/${id}`, {
+        state: { joinToken }
+      });
+      
     } catch (error) {
       setMessage({ text: 'Lỗi khi bắt đầu lớp học', type: 'error' });
     }
@@ -117,6 +140,29 @@ const CreateLive = () => {
       fetchLiveClasses();
     } catch (error) {
       setMessage({ text: 'Lỗi khi kết thúc lớp học', type: 'error' });
+    }
+  };
+
+  const joinClass = async (id) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      
+      // Join để lấy joinToken
+      const joinResponse = await axios.post(
+        `${API_URL}/student/live-classes/${id}/join`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const joinToken = joinResponse.data.data.joinToken;
+      
+      // Navigate vào phòng
+      navigate(`/live-room/${id}`, {
+        state: { joinToken }
+      });
+      
+    } catch (error) {
+      setMessage({ text: 'Lỗi khi vào phòng học', type: 'error' });
     }
   };
 
@@ -214,7 +260,7 @@ const CreateLive = () => {
               <input
                 type="number"
                 value={formData.maxParticipants}
-                onChange={(e) => setFormData({...formData, maxParticipants: parseInt(e.target.value)})}
+                onChange={(e) => setFormData({...formData, maxParticipants: parseInt(e.target.value) || 100})}
                 min="1"
                 max="500"
               />
@@ -329,9 +375,9 @@ const CreateLive = () => {
                   )}
 
                   <div className="live-card-actions">
-                    {(liveClass.status === 'scheduled' || liveClass.status === 'active') && (
+                    {(liveClass.status === 'scheduled' || liveClass.status === 'live') && (
                       <button 
-                        onClick={() => navigate(`/teacher/live-room/${liveClass._id}`)} 
+                        onClick={() => joinClass(liveClass._id)} 
                         className="btn-join"
                       >
                         🎥 Vào Phòng
@@ -342,7 +388,7 @@ const CreateLive = () => {
                         ▶️ Bắt đầu
                       </button>
                     )}
-                    {liveClass.status === 'active' && (
+                    {liveClass.status === 'live' && (
                       <button onClick={() => endClass(liveClass._id)} className="btn-end">
                         ⏹️ Kết thúc
                       </button>

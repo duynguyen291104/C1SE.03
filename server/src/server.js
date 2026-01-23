@@ -8,7 +8,7 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
-const { initializeLiveClassSocket } = require('./socket/liveClassSocket');
+const { initializeLiveClassSocket } = require('./socket/liveClassSocketV2');
 
 // Load environment variables
 dotenv.config();
@@ -61,6 +61,7 @@ app.use('/api/documents', require('./routes/document.routes'));
 app.use('/api/slides', require('./routes/slide.routes'));
 app.use('/api/quizzes', require('./routes/quiz.routes'));
 app.use('/api/student/quizzes', require('./routes/student.quiz.routes'));
+app.use('/api/student/live-classes', require('./routes/student.liveClass.routes'));
 app.use('/api/live-classes', require('./routes/liveClass.routes'));
 app.use('/api/materials', require('./routes/material.routes'));
 

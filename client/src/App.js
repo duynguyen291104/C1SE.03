@@ -15,6 +15,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import StudentQuizzes from './pages/StudentQuizzes';
 import StudentMaterials from './pages/StudentMaterials';
 import StudentResults from './pages/StudentResults';
+import StudentLiveClasses from './pages/StudentLiveClasses';
 
 // Teacher pages
 import CreateSlide from './pages/CreateSlide';
@@ -100,6 +101,22 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/student/classes"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <StudentLiveClasses />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/live-classroom/:classId"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <LiveClassRoom />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Teacher routes */}
           <Route
@@ -146,6 +163,16 @@ function App() {
             path="/teacher/live-room/:liveClassId"
             element={
               <ProtectedRoute requiredRole="teacher">
+                <LiveClassRoom />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Live Room - accessible by all authenticated users */}
+          <Route
+            path="/live-room/:liveClassId"
+            element={
+              <ProtectedRoute>
                 <LiveClassRoom />
               </ProtectedRoute>
             }

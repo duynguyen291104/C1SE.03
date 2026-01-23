@@ -23,6 +23,9 @@ const textractExtract = promisify(Textract.fromFileWithPath);
 
 // Redis connection
 const connection = new Redis({
+  host: process.env.REDIS_HOST || 'redis',
+  port: process.env.REDIS_PORT || 6379,
+  family: 4, // Force IPv4
   host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT || '6379'),
   maxRetriesPerRequest: null,

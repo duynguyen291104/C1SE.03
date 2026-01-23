@@ -1,30 +1,67 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
+import useWebRTC from '../hooks/useWebRTC';
+import VideoGrid from '../components/VideoGrid';
 import './LiveClassRoom.css';
 
 const LiveClassRoom = () => {
   const { liveClassId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const socketRef = useRef(null);
   
   const [liveClass, setLiveClass] = useState(null);
   const [participants, setParticipants] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [questions, setQuestions] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [answerText, setAnswerText] = useState({});
   const [isConnected, setIsConnected] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
   const [roomId, setRoomId] = useState('');
+  const [joinToken, setJoinToken] = useState('');
   
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
 
+  // WebRTC Hook - chỉ cần joinToken, hook tự tìm SOCKET_URL
+  const {
+    localStream,
+    remoteStreams,
+    isConnected: webrtcConnected,
+    isMicOn,
+    isCameraOn,
+    isScreenSharing,
+    toggleMicrophone,
+    toggleCamera,
+    startScreenShare,
+    stopScreenShare,
+    sendMessage: sendWebRTCMessage,
+    askQuestion: askWebRTCQuestion,
+    raiseHand: raiseWebRTCHand,
+    messages: webrtcMessages,
+    questions: webrtcQuestions,
+    roomData: webrtcRoomData,
+    cleanup
+  } = useWebRTC(joinToken);
+
+  // Update participants from roomData
+  useEffect(() => {
+    if (webrtcRoomData && webrtcRoomData.members) {
+      setParticipants(webrtcRoomData.members);
+      console.log('👥 Participants updated:', webrtcRoomData.members.length, webrtcRoomData.members);
+    }
+  }, [webrtcRoomData]);
+
+  // Debug: Log messages when they change
+  useEffect(() => {
+    console.log('💬 Messages updated:', webrtcMessages.length, webrtcMessages);
+  }, [webrtcMessages]);
+
   useEffect(() => {
     loadLiveClass();
     return () => {
+      cleanup(); // Cleanup WebRTC
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
@@ -34,31 +71,84 @@ const LiveClassRoom = () => {
   const loadLiveClass = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await axios.get(`${API_URL}/live-classes/${liveClassId}`, {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      // Check for joinToken from navigation state (student joining)
+      const navJoinToken = location.state?.joinToken;
+      if (navJoinToken) {
+        setJoinToken(navJoinToken);
+      }
+      
+      // Determine which endpoint to use based on user role
+      let endpoint = '';
+      let isTeacherUser = false;
+      
+      if (user && user.roles && user.roles.includes('teacher')) {
+        endpoint = `${API_URL}/live-classes/${liveClassId}`;
+        isTeacherUser = true;
+        
+        // Teacher needs to join their own class to get joinToken
+        try {
+          const joinResponse = await axios.post(
+            `${API_URL}/student/live-classes/${liveClassId}/join`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setJoinToken(joinResponse.data.data.joinToken);
+        } catch (err) {
+          console.error('Teacher join error:', err);
+        }
+      } else {
+        endpoint = `${API_URL}/student/live-classes/${liveClassId}`;
+        isTeacherUser = false;
+        
+        // If student doesn't have joinToken from navigation, try to join
+        if (!navJoinToken) {
+          try {
+            const joinResponse = await axios.post(
+              `${API_URL}/student/live-classes/${liveClassId}/join`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setJoinToken(joinResponse.data.data.joinToken);
+          } catch (err) {
+            alert('Không thể tham gia lớp học. Vui lòng thử lại.');
+            navigate('/student/classes');
+            return;
+          }
+        }
+      }
+      
+      const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       const data = response.data.data;
       setLiveClass(data);
-      setRoomId(data.roomId);
       
-      // Check if current user is teacher
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        setIsTeacher(user._id === data.teacherId._id);
+      // Set roomId if available (for students who have joined)
+      if (data.roomId) {
+        setRoomId(data.roomId);
       }
       
-      // Initialize messages and questions from database
-      setMessages(data.chat || []);
-      setQuestions(data.questions || []);
+      // Check if current user is teacher
+      if (user && data.teacherId) {
+        setIsTeacher(user._id === data.teacherId._id || user._id === data.teacherId);
+      }
       
-      // Connect to socket
-      connectSocket(data.roomId, token);
     } catch (error) {
       console.error('Error loading live class:', error);
-      alert('Failed to load live class');
-      navigate('/teacher/create-live');
+      alert('Không thể tải thông tin lớp học');
+      
+      // Navigate back based on user role
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      if (user && user.roles && user.roles.includes('teacher')) {
+        navigate('/teacher/create-live');
+      } else {
+        navigate('/student/classes');
+      }
     }
   };
 
@@ -85,37 +175,15 @@ const LiveClassRoom = () => {
     socket.on('user-joined', ({ user, participantCount }) => {
       console.log(`${user.fullName} joined`);
       setParticipants(prev => [...prev, user]);
-      
-      // Show notification
-      addSystemMessage(`${user.fullName} đã tham gia`);
     });
 
     socket.on('user-left', ({ userName, participantCount }) => {
       console.log(`${userName} left`);
       setParticipants(prev => prev.filter(p => p.fullName !== userName));
-      
-      // Show notification
-      addSystemMessage(`${userName} đã rời phòng`);
-    });
-
-    socket.on('new-message', (message) => {
-      setMessages(prev => [...prev, message]);
-    });
-
-    socket.on('new-question', (question) => {
-      setQuestions(prev => [...prev, question]);
-    });
-
-    socket.on('question-answered', ({ questionId, answer, answeredAt }) => {
-      setQuestions(prev => prev.map(q => 
-        q._id === questionId 
-          ? { ...q, answer, isAnswered: true, answeredAt }
-          : q
-      ));
     });
 
     socket.on('hand-raised', ({ userId, userName }) => {
-      addSystemMessage(`✋ ${userName} đã giơ tay`);
+      console.log(`✋ ${userName} raised hand`);
     });
 
     socket.on('force-mute', () => {
@@ -134,23 +202,14 @@ const LiveClassRoom = () => {
     socketRef.current = socket;
   };
 
-  const addSystemMessage = (text) => {
-    setMessages(prev => [...prev, {
-      _id: Date.now().toString(),
-      userName: 'System',
-      message: text,
-      timestamp: new Date(),
-      isSystem: true
-    }]);
-  };
+
 
   const sendMessage = () => {
-    if (!currentMessage.trim() || !socketRef.current) return;
+    if (!currentMessage.trim()) return;
     
-    socketRef.current.emit('send-message', {
-      roomId,
-      message: currentMessage
-    });
+    console.log('🚀 Sending message:', currentMessage);
+    // Use WebRTC send message
+    sendWebRTCMessage(currentMessage);
     
     setCurrentMessage('');
   };
@@ -169,9 +228,7 @@ const LiveClassRoom = () => {
   };
 
   const raiseHand = () => {
-    if (socketRef.current) {
-      socketRef.current.emit('raise-hand', { roomId });
-    }
+    raiseWebRTCHand();
   };
 
   const muteParticipant = (socketId) => {
@@ -187,7 +244,7 @@ const LiveClassRoom = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setLiveClass(prev => ({ ...prev, status: 'active' }));
+      setLiveClass(prev => ({ ...prev, status: 'live' }));
       alert('Lớp học đã bắt đầu!');
     } catch (error) {
       alert('Không thể bắt đầu lớp học');
@@ -226,7 +283,7 @@ const LiveClassRoom = () => {
         <div className="header-left">
           <h2>🎥 {liveClass.title}</h2>
           <span className={`status-badge ${liveClass.status}`}>
-            {liveClass.status === 'active' ? '🔴 Live' : '⏸ Scheduled'}
+            {liveClass.status === 'live' ? '🔴 Live' : '⏸ Scheduled'}
           </span>
           <span className="participant-count">
             👥 {participants.length} người tham gia
@@ -249,7 +306,7 @@ const LiveClassRoom = () => {
                   ▶️ Bắt Đầu
                 </button>
               )}
-              {liveClass.status === 'active' && (
+              {liveClass.status === 'live' && (
                 <button onClick={endClass} className="btn-danger">
                   ⏹ Kết Thúc
                 </button>
@@ -261,7 +318,18 @@ const LiveClassRoom = () => {
               ✋ Giơ Tay
             </button>
           )}
-          <button onClick={() => navigate('/teacher/create-live')} className="btn-secondary">
+          <button 
+            onClick={() => {
+              const userStr = localStorage.getItem('user');
+              const user = userStr ? JSON.parse(userStr) : null;
+              if (user && user.roles && user.roles.includes('teacher')) {
+                navigate('/teacher/create-live');
+              } else {
+                navigate('/student/classes');
+              }
+            }} 
+            className="btn-secondary"
+          >
             🚪 Rời Phòng
           </button>
         </div>
@@ -298,12 +366,45 @@ const LiveClassRoom = () => {
         <div className="main-content">
           {/* Video/Content Area */}
           <div className="video-area">
-            <div className="video-placeholder">
-              <h3>📹 Khu vực video</h3>
-              <p>Tính năng video call sẽ được tích hợp sau</p>
-              <div className="room-info">
-                <p><strong>Room ID:</strong> {roomId}</p>
-                <p><strong>Password:</strong> {liveClass.password}</p>
+            <VideoGrid
+              localStream={localStream}
+              remoteStreams={remoteStreams}
+              localUser={{
+                id: 'local',
+                name: 'Bạn',
+                isMicOn,
+                isCameraOn
+              }}
+            />
+            
+            {/* Video Controls */}
+            <div className="video-controls">
+              <button 
+                onClick={toggleMicrophone}
+                className={`control-btn ${isMicOn ? 'active' : 'inactive'}`}
+                title={isMicOn ? 'Tắt micro' : 'Bật micro'}
+              >
+                {isMicOn ? '🎤' : '🔇'}
+              </button>
+              
+              <button 
+                onClick={toggleCamera}
+                className={`control-btn ${isCameraOn ? 'active' : 'inactive'}`}
+                title={isCameraOn ? 'Tắt camera' : 'Bật camera'}
+              >
+                {isCameraOn ? '📹' : '📷'}
+              </button>
+              
+              <button 
+                onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+                className={`control-btn ${isScreenSharing ? 'active' : ''}`}
+                title={isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'}
+              >
+                🖥️
+              </button>
+              
+              <div className="connection-indicator">
+                {webrtcConnected ? '🟢 Đã kết nối' : '🔴 Đang kết nối...'}
               </div>
             </div>
           </div>
@@ -313,7 +414,7 @@ const LiveClassRoom = () => {
             <div className="chat-area">
               <h3>💬 Chat</h3>
               <div className="messages-container">
-                {messages.map((msg, index) => (
+                {webrtcMessages.map((msg, index) => (
                   <div 
                     key={msg._id || index} 
                     className={`message ${msg.isSystem ? 'system-message' : ''} ${msg.userRole === 'teacher' ? 'teacher-message' : ''}`}
@@ -347,9 +448,9 @@ const LiveClassRoom = () => {
         {/* Questions Panel */}
         {liveClass.settings.allowQuestions && (
           <div className="questions-panel">
-            <h3>❓ Câu Hỏi ({questions.length})</h3>
+            <h3>❓ Câu Hỏi ({webrtcQuestions.length})</h3>
             <div className="questions-list">
-              {questions.map((q, index) => (
+              {webrtcQuestions.map((q, index) => (
                 <div key={q._id || index} className={`question-item ${q.isAnswered ? 'answered' : ''}`}>
                   <div className="question-header">
                     <strong>{q.userName}</strong>

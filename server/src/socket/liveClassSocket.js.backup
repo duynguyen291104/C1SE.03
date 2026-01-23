@@ -261,6 +261,144 @@ const initializeLiveClassSocket = (io) => {
       }
     });
 
+    // Send chat message
+    socket.on('send-message', async ({ roomId, message }) => {
+      try {
+        console.log('📩 Received send-message:', { roomId, message, currentRoom: socket.currentRoom, userId: socket.user._id });
+        
+        if (socket.currentRoom !== roomId) {
+          console.log('❌ Room mismatch:', socket.currentRoom, '!==', roomId);
+          return socket.emit('error', { message: 'You are not in this room' });
+        }
+
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        if (!liveClass.settings.allowChat && socket.user.role !== 'teacher') {
+          return socket.emit('error', { message: 'Chat is disabled' });
+        }
+
+        const chatMessage = {
+          _id: Date.now().toString(),
+          userId: socket.user._id,
+          userName: socket.user.fullName,
+          userRole: socket.user.role,
+          message: message.trim(),
+          timestamp: new Date()
+        };
+
+        // Save to database
+        liveClass.chat.push(chatMessage);
+        await liveClass.save();
+
+        console.log('✅ Broadcasting message to room:', roomId, chatMessage);
+        // Broadcast to all in room
+        liveNs.to(roomId).emit('new-message', chatMessage);
+      } catch (error) {
+        console.error('Error sending message:', error);
+        socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
+
+    // Ask question
+    socket.on('ask-question', async ({ roomId, question }) => {
+      try {
+        if (socket.currentRoom !== roomId) {
+          return socket.emit('error', { message: 'You are not in this room' });
+        }
+
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        if (!liveClass.settings.allowQuestions && socket.user.role !== 'teacher') {
+          return socket.emit('error', { message: 'Questions are disabled' });
+        }
+
+        const newQuestion = {
+          _id: Date.now().toString(),
+          userId: socket.user._id,
+          userName: socket.user.fullName,
+          question: question.trim(),
+          answer: '',
+          isAnswered: false,
+          timestamp: new Date()
+        };
+
+        // Save to database
+        liveClass.questions.push(newQuestion);
+        await liveClass.save();
+
+        // Notify all participants
+        liveNs.to(roomId).emit('new-question', newQuestion);
+      } catch (error) {
+        console.error('Error asking question:', error);
+        socket.emit('error', { message: 'Failed to ask question' });
+      }
+    });
+
+    // Answer question (teacher only)
+    socket.on('answer-question', async ({ roomId, questionId, answer }) => {
+      try {
+        if (socket.currentRoom !== roomId) {
+          return socket.emit('error', { message: 'You are not in this room' });
+        }
+
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        // Only teacher can answer
+        if (socket.user._id.toString() !== liveClass.teacherId.toString()) {
+          return socket.emit('error', { message: 'Only teacher can answer questions' });
+        }
+
+        const question = liveClass.questions.id(questionId);
+        if (question) {
+          question.answer = answer.trim();
+          question.isAnswered = true;
+          question.answeredAt = new Date();
+          await liveClass.save();
+
+          // Notify all participants
+          liveNs.to(roomId).emit('question-answered', {
+            questionId,
+            answer: answer.trim(),
+            answeredAt: new Date()
+          });
+        }
+      } catch (error) {
+        console.error('Error answering question:', error);
+        socket.emit('error', { message: 'Failed to answer question' });
+      }
+    });
+
+    // Raise hand (student)
+    socket.on('raise-hand', ({ roomId }) => {
+      if (socket.currentRoom === roomId) {
+        socket.to(roomId).emit('hand-raised', {
+          userId: socket.user._id,
+          userName: socket.user.fullName
+        });
+      }
+    });
+
+    // Mute/unmute participant (teacher only)
+    socket.on('mute-participant', async ({ roomId, socketId }) => {
+      try {
+        if (socket.currentRoom !== roomId) {
+          return socket.emit('error', { message: 'You are not in this room' });
+        }
+
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        // Only teacher can mute
+        if (socket.user._id.toString() !== liveClass.teacherId.toString()) {
+          return socket.emit('error', { message: 'Only teacher can mute participants' });
+        }
+
+        // Send mute command to specific participant
+        liveNs.to(socketId).emit('force-mute');
+      } catch (error) {
+        socket.emit('error', { message: 'Failed to mute participant' });
+      }
+    });
+
     // Leave room
     socket.on('leave-room', async () => {
       await handleUserLeave(socket, liveNs);
