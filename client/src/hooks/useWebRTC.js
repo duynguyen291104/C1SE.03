@@ -105,7 +105,14 @@ const useWebRTC = (joinToken, iceServers = []) => {
         const newMap = new Map(prev);
         const user = newMap.get(userId);
         if (user) {
-          newMap.set(userId, { ...user, cameraEnabled: enabled });
+          // Only copy necessary fields to avoid circular reference with MediaStream
+          newMap.set(userId, {
+            stream: user.stream,
+            userName: user.userName,
+            userId: user.userId,
+            cameraEnabled: enabled,
+            micEnabled: user.micEnabled
+          });
         }
         return newMap;
       });
@@ -117,7 +124,14 @@ const useWebRTC = (joinToken, iceServers = []) => {
         const newMap = new Map(prev);
         const user = newMap.get(userId);
         if (user) {
-          newMap.set(userId, { ...user, micEnabled: enabled });
+          // Only copy necessary fields to avoid circular reference with MediaStream
+          newMap.set(userId, {
+            stream: user.stream,
+            userName: user.userName,
+            userId: user.userId,
+            cameraEnabled: user.cameraEnabled,
+            micEnabled: enabled
+          });
         }
         return newMap;
       });
@@ -266,8 +280,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         const newMap = new Map(prev);
         newMap.set(userId, {
           stream: remoteStream,
-          userName,
-          userId,
+          userName: userName,
+          userId: userId,
+          cameraEnabled: true,  // Default to enabled
+          micEnabled: true      // Default to enabled
         });
         return newMap;
       });
