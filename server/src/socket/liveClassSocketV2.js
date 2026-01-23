@@ -320,23 +320,31 @@ const initializeLiveClassSocket = (io) => {
         }
 
         const chatMessage = {
-          _id: Date.now().toString(),
+          userId: socket.user._id,
+          message: message.trim(),
+          timestamp: new Date()
+        };
+
+        // Save to database (MongoDB will auto-generate _id)
+        liveClass.chat.push(chatMessage);
+        await liveClass.save();
+
+        // Get the saved message with auto-generated _id for broadcasting
+        const savedMessage = liveClass.chat[liveClass.chat.length - 1];
+        const broadcastMessage = {
+          _id: savedMessage._id.toString(),
           userId: socket.user._id,
           userName: socket.user.fullName,
           userRole: socket.user.role,
           userAvatar: socket.user.avatar,
           message: message.trim(),
-          timestamp: new Date()
+          timestamp: savedMessage.timestamp
         };
-
-        // Save to database
-        liveClass.chat.push(chatMessage);
-        await liveClass.save();
 
         console.log('✅ Broadcasting chat message to room:', socket.currentRoom);
 
         // Broadcast to ALL in room (including sender)
-        liveNs.to(socket.currentRoom).emit('chat:message', chatMessage);
+        liveNs.to(socket.currentRoom).emit('chat:message', broadcastMessage);
       } catch (err) {
         console.error('❌ Chat error:', err);
         socket.emit('error', { message: 'Failed to send message' });
@@ -356,10 +364,7 @@ const initializeLiveClassSocket = (io) => {
         }
 
         const newQuestion = {
-          _id: Date.now().toString(),
           userId: socket.user._id,
-          userName: socket.user.fullName,
-          userAvatar: socket.user.avatar,
           question: question.trim(),
           answer: '',
           isAnswered: false,
@@ -369,7 +374,20 @@ const initializeLiveClassSocket = (io) => {
         liveClass.questions.push(newQuestion);
         await liveClass.save();
 
-        liveNs.to(socket.currentRoom).emit('qa:new-question', newQuestion);
+        // Get saved question with auto-generated _id
+        const savedQuestion = liveClass.questions[liveClass.questions.length - 1];
+        const broadcastQuestion = {
+          _id: savedQuestion._id.toString(),
+          userId: socket.user._id,
+          userName: socket.user.fullName,
+          userAvatar: socket.user.avatar,
+          question: question.trim(),
+          answer: '',
+          isAnswered: false,
+          timestamp: savedQuestion.timestamp
+        };
+
+        liveNs.to(socket.currentRoom).emit('qa:new-question', broadcastQuestion);
       } catch (error) {
         console.error('Error asking question:', error);
       }
