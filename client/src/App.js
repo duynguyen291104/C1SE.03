@@ -24,6 +24,7 @@ import CreateLive from './pages/CreateLive';
 import Materials from './pages/Materials';
 import LiveClassRoom from './pages/LiveClassRoom';
 import JoinLiveClass from './pages/JoinLiveClass';
+import TestVideoGrid from './pages/TestVideoGrid';
 
 // Dashboard router based on roles
 const DashboardRouter = () => {
@@ -200,6 +201,9 @@ function App() {
 
           {/* Dashboard router */}
           <Route path="/dashboard" element={<DashboardRouter />} />
+
+          {/* Test page - public for demo */}
+          <Route path="/test-video-grid" element={<TestVideoGrid />} />
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

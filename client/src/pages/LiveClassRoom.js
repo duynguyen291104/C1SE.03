@@ -373,6 +373,8 @@ const LiveClassRoom = () => {
             <VideoGrid
               localStream={localStream}
               remoteStreams={remoteStreams}
+              participants={participants}
+              currentUserId={webrtcRoomData?.user?.userId}
               localUserName={webrtcRoomData?.user?.fullName || 'You'}
               isCameraOn={isCameraOn}
               isMicOn={isMicOn}
