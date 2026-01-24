@@ -136,11 +136,27 @@ const initializeLiveClassSocket = (io) => {
           _id: liveClass._id,
           title: liveClass.title,
           description: liveClass.description,
-          teacherId: liveClass.teacherId,
+          teacherId: liveClass.teacherId ? {
+            _id: liveClass.teacherId._id,
+            fullName: liveClass.teacherId.profile?.fullName || liveClass.teacherId.email
+          } : null,
           status: liveClass.status,
           settings: liveClass.settings
         },
-        members,
+        user: {
+          userId: socket.user._id,
+          fullName: socket.user.fullName,
+          email: socket.user.email,
+          role: socket.user.role,
+          avatar: socket.user.avatar
+        },
+        members: members.map(m => ({
+          userId: m.userId,
+          fullName: m.fullName,
+          role: m.role,
+          avatar: m.avatar,
+          joinedAt: m.joinedAt
+        })),
         isTeacher: socket.user._id === liveClass.teacherId._id.toString(),
         mediaStates: await presenceManager.getRoomMediaStates(roomId)
       });

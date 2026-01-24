@@ -16,9 +16,9 @@ const useWebRTC = (joinToken, iceServers = []) => {
   const [roomData, setRoomData] = useState(null);
   const [error, setError] = useState(null);
   
-  // Media states
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isCameraOn, setIsCameraOn] = useState(true);
+  // Media states - Mặc định OFF cho cả mic và camera
+  const [isMicOn, setIsMicOn] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   
   // Communication states
@@ -229,16 +229,18 @@ const useWebRTC = (joinToken, iceServers = []) => {
 
   // ============ Auto-start Local Stream ============
   useEffect(() => {
-    if (isConnected && !localStream) {
-      startLocalStream().catch(err => {
+    if (isConnected && !localStream && roomData) {
+      // Start with camera OFF by default
+      // Teacher can enable it manually, students too
+      startLocalStream(true, false).catch(err => {
         console.error('Failed to start local stream:', err);
         setError('Could not access camera/microphone. Please check permissions.');
       });
     }
-  }, [isConnected, localStream]);
+  }, [isConnected, localStream, roomData]);
 
   // ============ Get Local Media ============
-  const startLocalStream = useCallback(async (audioEnabled = true, videoEnabled = true) => {
+  const startLocalStream = useCallback(async (audioEnabled = false, videoEnabled = false) => {
     try {
       const constraints = {
         audio: audioEnabled,
@@ -251,6 +253,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       setLocalStream(stream);
+      
+      // Set states theo constraints
+      setIsMicOn(audioEnabled);
+      setIsCameraOn(videoEnabled);
 
       // Add tracks to all existing peer connections
       peerConnections.current.forEach((pc) => {
@@ -259,7 +265,7 @@ const useWebRTC = (joinToken, iceServers = []) => {
         });
       });
 
-      console.log('🎥 Local stream started');
+      console.log(`🎥 Local stream started (mic: ${audioEnabled}, camera: ${videoEnabled})`);
       return stream;
     } catch (err) {
       console.error('Error accessing media devices:', err);
@@ -401,31 +407,62 @@ const useWebRTC = (joinToken, iceServers = []) => {
   };
 
   // ============ Media Controls ============
-  const toggleMicrophone = useCallback((enabled) => {
-    if (localStream) {
+  const toggleMicrophone = useCallback(async (enabled) => {
+    try {
       const newState = enabled !== undefined ? enabled : !isMicOn;
-      localStream.getAudioTracks().forEach(track => {
-        track.enabled = newState;
-      });
-      setIsMicOn(newState);
-      socketRef.current?.emit('media:toggle-mic', { enabled: newState });
-      return newState;
+      
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = newState;
+        });
+        setIsMicOn(newState);
+        socketRef.current?.emit('media:toggle-mic', { enabled: newState });
+        console.log(`🎤 Microphone ${newState ? 'ON' : 'OFF'}`);
+        return newState;
+      } else if (newState) {
+        // Chưa có stream và muốn bật mic -> khởi tạo stream
+        console.log('🎥 Starting stream with microphone...');
+        await startLocalStream(true, false);
+        setIsMicOn(true);
+        socketRef.current?.emit('media:toggle-mic', { enabled: true });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error toggling microphone:', err);
+      setError('Could not access microphone');
+      return false;
     }
-    return false;
-  }, [localStream, isMicOn]);
+  }, [localStream, isMicOn, startLocalStream]);
 
-  const toggleCamera = useCallback((enabled) => {
-    if (localStream) {
+  const toggleCamera = useCallback(async (enabled) => {
+    try {
       const newState = enabled !== undefined ? enabled : !isCameraOn;
-      localStream.getVideoTracks().forEach(track => {
-        track.enabled = newState;
-      });
-      setIsCameraOn(newState);
-      socketRef.current?.emit('media:toggle-camera', { enabled: newState });
-      return newState;
+      
+      if (localStream) {
+        // Stream đã có, chỉ cần enable/disable video track
+        localStream.getVideoTracks().forEach(track => {
+          track.enabled = newState;
+        });
+        setIsCameraOn(newState);
+        socketRef.current?.emit('media:toggle-camera', { enabled: newState });
+        console.log(`📷 Camera ${newState ? 'ON' : 'OFF'}`);
+        return newState;
+      } else if (newState) {
+        // Chưa có stream và muốn bật camera -> khởi tạo stream
+        console.log('🎥 Starting stream with camera...');
+        await startLocalStream(true, true);
+        setIsCameraOn(true);
+        socketRef.current?.emit('media:toggle-camera', { enabled: true });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error toggling camera:', err);
+      setError('Could not access camera');
+      return false;
     }
-    return false;
-  }, [localStream, isCameraOn]);
+  }, [localStream, isCameraOn, startLocalStream]);
 
   const startScreenShare = useCallback(async () => {
     try {
