@@ -21,6 +21,9 @@ const useWebRTC = (joinToken, iceServers = []) => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   
+  // Remote media states - Track camera/mic status of other users
+  const [remoteMediaStatus, setRemoteMediaStatus] = useState(new Map());
+  
   // Communication states
   const [messages, setMessages] = useState([]);
   const [questions, setQuestions] = useState([]);
@@ -74,9 +77,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
     });
 
     newSocket.on('room:user-joined', ({ user }) => {
-      console.log('👋 User joined:', user.fullName);
-      // New user joined, they will send us an offer
-      createPeerConnection(user.userId, user.fullName, false);
+      console.log('👋 User joined:', user.fullName, 'userId:', user.userId);
+      // Create peer connection - it will automatically add localStream tracks if available
+      const pc = createPeerConnection(user.userId, user.fullName, true);
+      console.log('✅ Peer connection created for:', user.fullName, 'will create offer:', !!localStream);
     });
 
     newSocket.on('room:user-left', ({ userId, userName }) => {
@@ -208,6 +212,27 @@ const useWebRTC = (joinToken, iceServers = []) => {
       alert('Your microphone has been muted by the teacher');
     });
 
+    // Media status synchronization - Receive remote user's camera/mic status
+    newSocket.on('media:user-camera-toggled', ({ userId, enabled }) => {
+      console.log(`📷 User ${userId} camera: ${enabled ? 'ON' : 'OFF'}`);
+      setRemoteMediaStatus(prev => {
+        const updated = new Map(prev);
+        const current = updated.get(userId) || {};
+        updated.set(userId, { ...current, camera: enabled });
+        return updated;
+      });
+    });
+
+    newSocket.on('media:user-mic-toggled', ({ userId, enabled }) => {
+      console.log(`🎤 User ${userId} mic: ${enabled ? 'ON' : 'OFF'}`);
+      setRemoteMediaStatus(prev => {
+        const updated = new Map(prev);
+        const current = updated.get(userId) || {};
+        updated.set(userId, { ...current, mic: enabled });
+        return updated;
+      });
+    });
+
     newSocket.on('disconnect', () => {
       console.log('❌ Disconnected from signaling server');
       setIsConnected(false);
@@ -258,11 +283,22 @@ const useWebRTC = (joinToken, iceServers = []) => {
       setIsMicOn(audioEnabled);
       setIsCameraOn(videoEnabled);
 
-      // Add tracks to all existing peer connections
-      peerConnections.current.forEach((pc) => {
+      // Add tracks to all existing peer connections and create offers
+      peerConnections.current.forEach((pc, userId) => {
         stream.getTracks().forEach(track => {
-          pc.addTrack(track, stream);
+          // Check if track already added
+          const existingSender = pc.getSenders().find(s => s.track === track);
+          if (!existingSender) {
+            pc.addTrack(track, stream);
+            console.log('➕ Added initial track to peer userId:', userId, 'kind:', track.kind);
+          }
         });
+        
+        // Create offer if we haven't sent one yet
+        if (pc.signalingState === 'stable' && pc.iceConnectionState === 'new') {
+          console.log('📤 Creating initial offer to userId:', userId);
+          createOffer(userId, pc);
+        }
       });
 
       console.log(`🎥 Local stream started (mic: ${audioEnabled}, camera: ${videoEnabled})`);
@@ -282,54 +318,98 @@ const useWebRTC = (joinToken, iceServers = []) => {
 
     const pc = new RTCPeerConnection(rtcConfig);
 
-    // Add local stream tracks if available
+    // ✅ CRITICAL: Capture userId và userName vào scope riêng để tránh closure bug
+    const capturedUserId = userId;
+    const capturedUserName = userName;
+
+    // Add local stream tracks if available (check if not already added)
     if (localStream) {
       localStream.getTracks().forEach(track => {
-        pc.addTrack(track, localStream);
+        // Check if this track is already added
+        const existingSender = pc.getSenders().find(s => s.track === track);
+        if (!existingSender) {
+          pc.addTrack(track, localStream);
+          console.log('➕ Added track to peer:', capturedUserName, 'kind:', track.kind);
+        }
       });
     }
 
-    // Handle incoming tracks
+    // ✅ Handle incoming tracks - GẮN CHO MỌI PEER
     pc.ontrack = (event) => {
-      console.log('📺 Received remote track from:', userName);
-      const [remoteStream] = event.streams;
+      const stream = event.streams[0];
+      const track = event.track;
+      
+      console.log('🎯 ontrack fired:', {
+        userId: capturedUserId,
+        userName: capturedUserName,
+        kind: track.kind,
+        streamId: stream?.id,
+        hasStream: !!stream
+      });
+      
+      if (!stream) {
+        console.log('⚠️ ontrack fired but no stream');
+        return;
+      }
       
       setRemoteStreams(prev => {
-        const newMap = new Map(prev);
-        newMap.set(userId, {
-          stream: remoteStream,
-          userName: userName,
-          userId: userId,
-          cameraEnabled: true,  // Default to enabled
-          micEnabled: true      // Default to enabled
+        const next = new Map(prev);
+        const existing = next.get(capturedUserId);
+        
+        if (existing) {
+          // Stream đã tồn tại → update lại (có thể có track mới)
+          console.log('🔄 Updating existing stream for:', capturedUserName);
+          next.set(capturedUserId, {
+            ...existing,
+            stream: stream
+          });
+        } else {
+          // Tạo mới
+          console.log('➕ Creating new stream entry for:', capturedUserName);
+          next.set(capturedUserId, {
+            userId: capturedUserId,
+            userName: capturedUserName,
+            stream: stream,
+            cameraEnabled: true,
+            micEnabled: true
+          });
+        }
+        
+        console.log('✅ Updated remoteStreams Map:', {
+          userId: capturedUserId,
+          userName: capturedUserName,
+          totalRemoteUsers: next.size,
+          allKeys: Array.from(next.keys())
         });
-        return newMap;
+        
+        return next;
       });
     };
 
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate && socketRef.current) {
+        // Serialize candidate to avoid circular reference
         socketRef.current.emit('webrtc:ice-candidate', {
-          toUserId: userId,
-          candidate: event.candidate,
+          toUserId: capturedUserId,
+          candidate: event.candidate.toJSON(),
         });
       }
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log(`ICE connection state with ${userName}:`, pc.iceConnectionState);
+      console.log(`ICE connection state with ${capturedUserName}:`, pc.iceConnectionState);
       
       if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-        closePeerConnection(userId);
+        closePeerConnection(capturedUserId);
       }
     };
 
-    peerConnections.current.set(userId, pc);
+    peerConnections.current.set(capturedUserId, pc);
 
     // If we should create offer (we joined after them)
     if (shouldCreateOffer && localStream) {
-      createOffer(userId, pc);
+      createOffer(capturedUserId, pc);
     }
 
     return pc;
@@ -342,7 +422,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
       
       socketRef.current?.emit('webrtc:offer', {
         toUserId: userId,
-        sdp: offer,
+        sdp: {
+          type: offer.type,
+          sdp: offer.sdp
+        },
       });
       
       console.log('📤 Sent offer to:', userId);
@@ -361,7 +444,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
       
       socketRef.current?.emit('webrtc:answer', {
         toUserId: userId,
-        sdp: answer,
+        sdp: {
+          type: answer.type,
+          sdp: answer.sdp
+        },
       });
       
       console.log('📤 Sent answer to:', userName);
@@ -411,53 +497,57 @@ const useWebRTC = (joinToken, iceServers = []) => {
     try {
       const newState = enabled !== undefined ? enabled : !isMicOn;
       
-      if (localStream) {
-        const audioTracks = localStream.getAudioTracks();
-        
-        if (audioTracks.length > 0) {
-          // Đã có audio track, chỉ cần enable/disable
-          audioTracks.forEach(track => {
-            track.enabled = newState;
-          });
-          setIsMicOn(newState);
-          // CHỈ emit boolean, KHÔNG emit object phức tạp
-          if (socketRef.current?.connected) {
-            socketRef.current.emit('media:toggle-mic', { enabled: newState });
-          }
-          console.log(`🎤 Microphone ${newState ? 'ON' : 'OFF'}`);
-        } else if (newState) {
-          // Có stream nhưng chưa có audio track, cần thêm audio track
-          console.log('🎤 Adding microphone track to existing stream...');
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const audioTrack = audioStream.getAudioTracks()[0];
-          
-          // Tạo stream mới với track mới
-          const newStream = new MediaStream([...localStream.getTracks(), audioTrack]);
-          setLocalStream(newStream);
-          
-          // Add audio track to all peer connections
-          peerConnections.current.forEach((pc) => {
-            pc.addTrack(audioTrack, newStream);
-          });
-          
+      if (!localStream) {
+        if (newState) {
+          console.log('🎥 Starting stream with microphone...');
+          await startLocalStream(true, isCameraOn);
           setIsMicOn(true);
-          if (socketRef.current?.connected) {
-            socketRef.current.emit('media:toggle-mic', { enabled: true });
-          }
-          console.log('🎤 Microphone ON');
         }
         return newState;
-      } else if (newState) {
-        // Chưa có stream và muốn bật mic -> khởi tạo stream
-        console.log('🎥 Starting stream with microphone...');
-        await startLocalStream(true, isCameraOn);
-        setIsMicOn(true);
-        if (socketRef.current?.connected) {
-          socketRef.current.emit('media:toggle-mic', { enabled: true });
-        }
-        return true;
       }
-      return false;
+
+      const audioTracks = localStream.getAudioTracks();
+      
+      if (audioTracks.length > 0) {
+        // Đã có audio track, chỉ enable/disable
+        audioTracks.forEach(track => {
+          track.enabled = newState;
+        });
+        setIsMicOn(newState);
+        console.log(`🎤 Microphone ${newState ? 'ON' : 'OFF'}`);
+      } else if (newState) {
+        // Thêm audio track mới
+        console.log('🎤 Adding microphone track...');
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioTrack = audioStream.getAudioTracks()[0];
+        
+        // Ensure track is enabled
+        audioTrack.enabled = true;
+        
+        localStream.addTrack(audioTrack);
+        
+        // Add/Replace track to peer connections + renegotiate
+        for (const [peerUserId, pc] of peerConnections.current.entries()) {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'audio');
+          
+          if (sender) {
+            await sender.replaceTrack(audioTrack);
+            console.log('🔄 Replaced audio track for peer:', peerUserId);
+          } else {
+            pc.addTrack(audioTrack, localStream);
+            console.log('➡️ Added audio track for peer:', peerUserId);
+            
+            // 🚨 BẮT BUỘC: renegotiate khi add track mới
+            console.log('🔁 Renegotiating for new audio track:', peerUserId);
+            await createOffer(peerUserId, pc);
+          }
+        }
+        
+        setIsMicOn(true);
+        console.log('🎤 Microphone ON - track enabled:', audioTrack.enabled);
+      }
+      
+      return newState;
     } catch (err) {
       console.error('Error toggling microphone:', err);
       setError('Could not access microphone');
@@ -469,59 +559,63 @@ const useWebRTC = (joinToken, iceServers = []) => {
     try {
       const newState = enabled !== undefined ? enabled : !isCameraOn;
       
-      if (localStream) {
-        const videoTracks = localStream.getVideoTracks();
-        
-        if (videoTracks.length > 0) {
-          // Đã có video track, chỉ cần enable/disable
-          videoTracks.forEach(track => {
-            track.enabled = newState;
-          });
-          setIsCameraOn(newState);
-          // CHỈ emit boolean, KHÔNG emit object phức tạp
-          if (socketRef.current?.connected) {
-            socketRef.current.emit('media:toggle-camera', { enabled: newState });
-          }
-          console.log(`📷 Camera ${newState ? 'ON' : 'OFF'}`);
-        } else if (newState) {
-          // Có stream nhưng chưa có video track, cần thêm video track
-          console.log('📷 Adding camera track to existing stream...');
-          const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              facingMode: 'user',
-            }
-          });
-          const videoTrack = videoStream.getVideoTracks()[0];
-          
-          // Tạo stream mới với track mới để tránh mutation
-          const newStream = new MediaStream([...localStream.getTracks(), videoTrack]);
-          setLocalStream(newStream);
-          
-          // Add video track to all peer connections
-          peerConnections.current.forEach((pc) => {
-            pc.addTrack(videoTrack, newStream);
-          });
-          
+      if (!localStream) {
+        if (newState) {
+          console.log('🎥 Starting stream with camera...');
+          await startLocalStream(isMicOn, true);
           setIsCameraOn(true);
-          if (socketRef.current?.connected) {
-            socketRef.current.emit('media:toggle-camera', { enabled: true });
-          }
-          console.log('📷 Camera ON');
         }
         return newState;
-      } else if (newState) {
-        // Chưa có stream và muốn bật camera -> khởi tạo stream
-        console.log('🎥 Starting stream with camera...');
-        await startLocalStream(isMicOn, true);
-        setIsCameraOn(true);
-        if (socketRef.current?.connected) {
-          socketRef.current.emit('media:toggle-camera', { enabled: true });
-        }
-        return true;
       }
-      return false;
+
+      const videoTracks = localStream.getVideoTracks();
+      
+      if (videoTracks.length > 0) {
+        // Đã có video track, chỉ enable/disable
+        videoTracks.forEach(track => {
+          track.enabled = newState;
+        });
+        setIsCameraOn(newState);
+        console.log(`📷 Camera ${newState ? 'ON' : 'OFF'}`);
+      } else if (newState) {
+        // Thêm video track mới
+        console.log('📷 Adding camera track...');
+        const videoStream = await navigator.mediaDevices.getUserMedia({ 
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+          }
+        });
+        const videoTrack = videoStream.getVideoTracks()[0];
+        
+        // Ensure track is enabled
+        videoTrack.enabled = true;
+        
+        localStream.addTrack(videoTrack);
+        
+        // Add/Replace track to peer connections + renegotiate
+        for (const [peerUserId, pc] of peerConnections.current.entries()) {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          
+          if (sender) {
+            await sender.replaceTrack(videoTrack);
+            console.log('🔄 Replaced video track for peer:', peerUserId);
+          } else {
+            pc.addTrack(videoTrack, localStream);
+            console.log('➡️ Added video track for peer:', peerUserId);
+            
+            // 🚨 BẮT BUỘC: renegotiate khi add track mới
+            console.log('🔁 Renegotiating for new video track:', peerUserId);
+            await createOffer(peerUserId, pc);
+          }
+        }
+        
+        setIsCameraOn(true);
+        console.log('📷 Camera ON - track enabled:', videoTrack.enabled, 'ready state:', videoTrack.readyState);
+      }
+      
+      return newState;
     } catch (err) {
       console.error('Error toggling camera:', err);
       setError('Could not access camera');
@@ -666,6 +760,7 @@ const useWebRTC = (joinToken, iceServers = []) => {
     isMicOn,
     isCameraOn,
     isScreenSharing,
+    remoteMediaStatus, // Map of userId -> { camera: boolean, mic: boolean }
     
     // Communication states
     messages,

@@ -32,6 +32,7 @@ const LiveClassRoom = () => {
     isMicOn,
     isCameraOn,
     isScreenSharing,
+    remoteMediaStatus,
     toggleMicrophone,
     toggleCamera,
     startScreenShare,
@@ -378,6 +379,7 @@ const LiveClassRoom = () => {
               localUserName={webrtcRoomData?.user?.fullName || 'You'}
               isCameraOn={isCameraOn}
               isMicOn={isMicOn}
+              remoteMediaStatus={remoteMediaStatus}
               pinnedUserId={pinnedVideoUserId}
               onPinVideo={pinVideo}
             />

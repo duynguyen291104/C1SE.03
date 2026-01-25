@@ -243,10 +243,13 @@ const initializeLiveClassSocket = (io) => {
           microphone: enabled
         });
 
-        socket.to(socket.currentRoom).emit('media:user-mic-changed', {
-          userId: socket.user._id,
+        // Broadcast to ALL users in room (including sender via io.to)
+        io.to(socket.currentRoom).emit('media:user-mic-toggled', {
+          userId: socket.user._id.toString(),
           enabled
         });
+        
+        console.log(`🎤 ${socket.user.name} mic: ${enabled ? 'ON' : 'OFF'}`);
       } catch (error) {
         console.error('Error toggling mic:', error);
       }
@@ -260,10 +263,13 @@ const initializeLiveClassSocket = (io) => {
           camera: enabled
         });
 
-        socket.to(socket.currentRoom).emit('media:user-camera-changed', {
-          userId: socket.user._id,
+        // Broadcast to ALL users in room (including sender via io.to)
+        io.to(socket.currentRoom).emit('media:user-camera-toggled', {
+          userId: socket.user._id.toString(),
           enabled
         });
+        
+        console.log(`📷 ${socket.user.name} camera: ${enabled ? 'ON' : 'OFF'}`);
       } catch (error) {
         console.error('Error toggling camera:', error);
       }

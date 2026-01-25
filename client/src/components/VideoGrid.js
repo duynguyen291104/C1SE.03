@@ -4,12 +4,16 @@ import './VideoGrid.css';
 /**
  * Component hiển thị video cho 1 người - LUÔN render dù có stream hay không
  */
-const VideoTile = ({ stream, userName, isMuted, isLocal, isScreenShare, cameraEnabled = true, isPinned, onPin, isInSidebar = false }) => {
+const VideoTile = ({ stream, userName, isMuted, isLocal, isScreenShare, cameraEnabled = true, micEnabled = true, isPinned, onPin, isInSidebar = false }) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      // Force play to ensure video starts
+      videoRef.current.play().catch(err => {
+        console.warn('Video play failed:', err);
+      });
     }
   }, [stream]);
 
@@ -25,6 +29,7 @@ const VideoTile = ({ stream, userName, isMuted, isLocal, isScreenShare, cameraEn
           playsInline
           muted={isLocal || isMuted}
           className="video-element"
+          style={{ objectFit: 'cover' }}
         />
       ) : (
         <div className="camera-off">
@@ -36,7 +41,7 @@ const VideoTile = ({ stream, userName, isMuted, isLocal, isScreenShare, cameraEn
       <div className="video-overlay">
         <span className="user-name">{userName} {isLocal && '(You)'}</span>
         <div className="video-controls">
-          {isMuted && <span className="muted-icon">🔇</span>}
+          {!micEnabled && <span className="muted-icon">🔇</span>}
           {!cameraEnabled && <span className="camera-icon">📷❌</span>}
           {onPin && !isLocal && (
             <button 
@@ -69,6 +74,7 @@ const VideoGrid = ({
   localUserName, 
   isCameraOn = true, 
   isMicOn = true,
+  remoteMediaStatus = new Map(), // Map of userId -> { camera: boolean, mic: boolean }
   pinnedUserId = null,
   onPinVideo 
 }) => {
@@ -101,15 +107,32 @@ const VideoGrid = ({
       cameraEnabled = isCameraOn;
       micEnabled = isMicOn;
     } else {
+      // Debug: Log participant ID và remoteStreams keys
+      console.log('🔍 Looking for stream:', {
+        participantId: participant.userId,
+        participantName: participant.fullName,
+        remoteStreamKeys: Array.from(remoteStreams?.keys() || []),
+        remoteStreamsSize: remoteStreams?.size || 0
+      });
+      
       // Tìm remote stream
       const remoteData = remoteStreams?.get(participant.userId);
       if (remoteData) {
         stream = remoteData.stream;
-        cameraEnabled = remoteData.cameraEnabled !== false;
-        micEnabled = remoteData.micEnabled !== false;
+        console.log('✅ Found stream for:', participant.fullName, stream);
       } else {
-        // Không có stream, nhưng vẫn render ô
-        cameraEnabled = false;
+        console.log('❌ No stream found for:', participant.fullName);
+      }
+      
+      // Lấy media status từ remoteMediaStatus
+      const mediaStatus = remoteMediaStatus.get(participant.userId);
+      if (mediaStatus) {
+        cameraEnabled = mediaStatus.camera !== false;
+        micEnabled = mediaStatus.mic !== false;
+      } else {
+        // Không có status, fallback ON (vì track có thể đã được gửi)
+        cameraEnabled = true;
+        micEnabled = true;
       }
     }
     
@@ -120,6 +143,7 @@ const VideoGrid = ({
       isLocal,
       isMuted: !micEnabled,
       cameraEnabled,
+      micEnabled,
       isPinned: participant.userId === pinnedUserId
     };
   });
@@ -161,13 +185,14 @@ const VideoGrid = ({
     <div className={`video-grid-container ${hasOverflow ? 'has-sidebar' : ''}`}>
       {/* Main video grid */}
       <div className={`video-grid ${gridClass}`}>
-        {gridVideos.map(({ stream, userName, userId, isLocal, isMuted, cameraEnabled, isPinned }) => (
+        {gridVideos.map(({ stream, userName, userId, isLocal, isMuted, cameraEnabled, micEnabled, isPinned }) => (
           <VideoTile
             key={userId}
             stream={stream}
             userName={userName}
             isMuted={isMuted}
             cameraEnabled={cameraEnabled}
+            micEnabled={micEnabled}
             isLocal={isLocal}
             isPinned={isPinned}
             onPin={!isLocal ? () => onPinVideo && onPinVideo(isPinned ? null : userId) : undefined}
@@ -207,13 +232,14 @@ const VideoGrid = ({
           {showSidebar && (
             <div className="sidebar-content">
               <div className="sidebar-scroll">
-                {sidebarVideos.map(({ stream, userName, userId, isLocal, isMuted, cameraEnabled, isPinned }) => (
+                {sidebarVideos.map(({ stream, userName, userId, isLocal, isMuted, cameraEnabled, micEnabled, isPinned }) => (
                   <div key={userId} className="sidebar-participant">
                     <VideoTile
                       stream={stream}
                       userName={userName}
                       isMuted={isMuted}
                       cameraEnabled={cameraEnabled}
+                      micEnabled={micEnabled}
                       isLocal={isLocal}
                       isPinned={isPinned}
                       isInSidebar={true}
