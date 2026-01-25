@@ -292,10 +292,10 @@ const LiveClassRoom = () => {
           <span className="participant-count">
             👥 {participants.length} người tham gia
           </span>
-          {isConnected ? (
+          {webrtcConnected ? (
             <span className="connection-status connected">🟢 Đã kết nối</span>
           ) : (
-            <span className="connection-status disconnected">🔴 Mất kết nối</span>
+            <span className="connection-status disconnected">🔴 Đang kết nối...</span>
           )}
         </div>
         

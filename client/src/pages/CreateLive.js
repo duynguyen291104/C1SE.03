@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/axios';
 import './CreateLive.css';
 
 const CreateLive = () => {
@@ -24,33 +24,24 @@ const CreateLive = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
-
   useEffect(() => {
     fetchLiveClasses();
   }, []);
 
   const fetchLiveClasses = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      
-      if (!token) {
-        setMessage({ text: 'Vui lòng đăng nhập để tạo lớp học trực tuyến', type: 'error' });
-        setTimeout(() => navigate('/login'), 2000);
-        return;
-      }
-      
-      const response = await axios.get(`${API_URL}/live-classes`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/live-classes');
       setLiveClasses(response.data.data);
     } catch (error) {
       console.error('Error fetching live classes:', error);
       if (error.response?.status === 401) {
         setMessage({ text: 'Phiên đăng nhập đã hết hạn', type: 'error' });
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
         setTimeout(() => navigate('/login'), 2000);
+      } else if (error.response?.status === 403) {
+        setMessage({ 
+          text: 'Bạn cần được phê duyệt làm giáo viên để tạo lớp học. Vui lòng liên hệ quản trị viên.', 
+          type: 'error' 
+        });
       }
     }
   };
@@ -66,28 +57,18 @@ const CreateLive = () => {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('accessToken');
-      
       // Tạo lớp học
-      const createResponse = await axios.post(`${API_URL}/live-classes`, formData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const createResponse = await api.post('/live-classes', formData);
       
       const newClass = createResponse.data.data;
       
       setMessage({ text: 'Tạo lớp học thành công! Đang bắt đầu lớp...', type: 'success' });
       
       // Tự động start class
-      await axios.post(`${API_URL}/live-classes/${newClass._id}/start`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/live-classes/${newClass._id}/start`);
       
       // Join để lấy joinToken
-      const joinResponse = await axios.post(
-        `${API_URL}/student/live-classes/${newClass._id}/join`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const joinResponse = await api.post(`/student/live-classes/${newClass._id}/join`);
       
       const joinToken = joinResponse.data.data.joinToken;
       
@@ -97,26 +78,19 @@ const CreateLive = () => {
       });
       
     } catch (error) {
-      setMessage({ text: error.response?.data?.message || 'Lỗi khi tạo lớp học', type: 'error' });
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Lỗi khi tạo lớp học';
+      setMessage({ text: errorMsg, type: 'error' });
       setLoading(false);
     }
   };
 
   const startClass = async (id) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      
       // Start class
-      await axios.post(`${API_URL}/live-classes/${id}/start`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/live-classes/${id}/start`);
       
       // Join để lấy joinToken
-      const joinResponse = await axios.post(
-        `${API_URL}/student/live-classes/${id}/join`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const joinResponse = await api.post(`/student/live-classes/${id}/join`);
       
       const joinToken = joinResponse.data.data.joinToken;
       
@@ -126,33 +100,26 @@ const CreateLive = () => {
       });
       
     } catch (error) {
-      setMessage({ text: 'Lỗi khi bắt đầu lớp học', type: 'error' });
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Lỗi khi bắt đầu lớp học';
+      setMessage({ text: errorMsg, type: 'error' });
     }
   };
 
   const endClass = async (id) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      await axios.post(`${API_URL}/live-classes/${id}/end`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/live-classes/${id}/end`);
       setMessage({ text: 'Kết thúc lớp học!', type: 'success' });
       fetchLiveClasses();
     } catch (error) {
-      setMessage({ text: 'Lỗi khi kết thúc lớp học', type: 'error' });
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Lỗi khi kết thúc lớp học';
+      setMessage({ text: errorMsg, type: 'error' });
     }
   };
 
   const joinClass = async (id) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      
       // Join để lấy joinToken
-      const joinResponse = await axios.post(
-        `${API_URL}/student/live-classes/${id}/join`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const joinResponse = await api.post(`/student/live-classes/${id}/join`);
       
       const joinToken = joinResponse.data.data.joinToken;
       
@@ -162,7 +129,8 @@ const CreateLive = () => {
       });
       
     } catch (error) {
-      setMessage({ text: 'Lỗi khi vào phòng học', type: 'error' });
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Lỗi khi vào phòng học';
+      setMessage({ text: errorMsg, type: 'error' });
     }
   };
 
@@ -170,14 +138,12 @@ const CreateLive = () => {
     if (!window.confirm('Bạn có chắc muốn xóa lớp học này?')) return;
 
     try {
-      const token = localStorage.getItem('accessToken');
-      await axios.delete(`${API_URL}/live-classes/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/live-classes/${id}`);
       setMessage({ text: 'Xóa lớp học thành công!', type: 'success' });
       fetchLiveClasses();
     } catch (error) {
-      setMessage({ text: 'Lỗi khi xóa lớp học', type: 'error' });
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Lỗi khi xóa lớp học';
+      setMessage({ text: errorMsg, type: 'error' });
     }
   };
 
