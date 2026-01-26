@@ -683,16 +683,24 @@ const initializeLiveClassSocket = (io) => {
 
     // Host duyệt học sinh vào phòng
     socket.on('room:approve-student', async ({ studentUserId }) => {
+      console.log(`🔥 RECEIVED room:approve-student event for student: ${studentUserId}`);
+      console.log(`   From socket: ${socket.id}, User: ${socket.user.fullName}`);
+      console.log(`   LiveClassId: ${socket.liveClassId}`);
+      
       try {
         const liveClass = await LiveClass.findById(socket.liveClassId);
         
         if (!liveClass) {
+          console.log('❌ Live class not found');
           return socket.emit('error', { message: 'Live class not found' });
         }
 
         // Chỉ host mới được duyệt
         const isHost = socket.user._id === liveClass.teacherId.toString();
+        console.log(`   Is host: ${isHost}, Teacher ID: ${liveClass.teacherId}`);
+        
         if (!isHost) {
+          console.log('❌ User is not host');
           return socket.emit('error', { message: 'Only host can approve students' });
         }
 
