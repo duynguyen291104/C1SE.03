@@ -63,6 +63,53 @@ const LiveClassRoom = () => {
     console.log('💬 Messages updated:', webrtcMessages.length, webrtcMessages);
   }, [webrtcMessages]);
 
+  // ============ Handle Room Warning & Ended Events ============
+  useEffect(() => {
+    if (!joinToken) return;
+
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
+    const socket = io(`${SOCKET_URL}/live`, {
+      auth: { token: joinToken }
+    });
+
+    // ⚠️ Cảnh báo 30 giây trước khi kết thúc
+    socket.on('room:warning', ({ message, secondsRemaining }) => {
+      console.log('⚠️ Room warning event received:', message);
+      
+      // Hiển thị cảnh báo nổi bật
+      alert(`⚠️ ${message}`);
+      
+      // Có thể thêm toast notification hoặc countdown timer UI
+      // toast.warning(message, { autoClose: 30000 });
+    });
+
+    // 🚪 Phòng kết thúc
+    socket.on('room:ended', ({ message }) => {
+      console.log('🚪 Room ended event received:', message);
+      
+      // Hiển thị thông báo
+      alert(message || 'Phòng học đã kết thúc');
+      
+      // Cleanup
+      cleanup();
+      socket.disconnect();
+      
+      // Redirect về trang phù hợp
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      if (user && user.roles && user.roles.includes('teacher')) {
+        navigate('/teacher/dashboard');
+      } else {
+        navigate('/student/dashboard');
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [joinToken, navigate, cleanup]);
+
   useEffect(() => {
     loadLiveClass();
     return () => {

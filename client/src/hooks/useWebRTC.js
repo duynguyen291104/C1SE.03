@@ -238,6 +238,23 @@ const useWebRTC = (joinToken, iceServers = []) => {
       setIsConnected(false);
     });
 
+    // ============ Room Warning Event (30s trước khi kết thúc) ============
+    newSocket.on('room:warning', ({ message, secondsRemaining }) => {
+      console.log('⚠️ Room warning:', message);
+      // Component sử dụng hook sẽ nhận được event này qua roomData hoặc callback
+      // Tạm thời log ra, component có thể handle sau
+    });
+
+    // ============ Room Ended Event ============
+    newSocket.on('room:ended', ({ message, endedAt }) => {
+      console.log('🚪 Room ended:', message);
+      alert(message || 'Phòng học đã kết thúc');
+      
+      // Cleanup và redirect sẽ được xử lý bởi component sử dụng hook này
+      // Component nên lắng nghe event này và thực hiện cleanup + redirect
+      cleanup();
+    });
+
     newSocket.on('error', ({ message }) => {
       console.error('Socket error:', message);
       setError(message);

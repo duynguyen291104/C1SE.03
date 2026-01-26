@@ -46,6 +46,15 @@ const CreateLive = () => {
     }
   };
 
+  // Hàm chuyển datetime-local string sang Date object đúng timezone local
+  const convertLocalDateTimeToISO = (dateTimeLocal) => {
+    if (!dateTimeLocal) return null;
+    // datetime-local format: "2026-01-26T20:05"
+    // Tạo Date object với timezone local (không phải UTC)
+    const date = new Date(dateTimeLocal);
+    return date.toISOString();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -57,8 +66,15 @@ const CreateLive = () => {
     setLoading(true);
 
     try {
+      // Chuyển đổi thời gian sang ISO string với timezone đúng
+      const dataToSend = {
+        ...formData,
+        scheduledStart: convertLocalDateTimeToISO(formData.scheduledStart),
+        scheduledEnd: convertLocalDateTimeToISO(formData.scheduledEnd)
+      };
+      
       // Tạo lớp học
-      const createResponse = await api.post('/live-classes', formData);
+      const createResponse = await api.post('/live-classes', dataToSend);
       
       const newClass = createResponse.data.data;
       
@@ -148,7 +164,18 @@ const CreateLive = () => {
   };
 
   const formatDateTime = (dateString) => {
-    return new Date(dateString).toLocaleString('vi-VN');
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
   };
 
   const getStatusBadge = (status) => {

@@ -2,6 +2,7 @@ const LiveClass = require('../models/LiveClass');
 const AuditLog = require('../models/AuditLog');
 const crypto = require('crypto');
 const { getPresenceManager } = require('../services/redisPresence');
+const roomScheduler = require('../services/roomScheduler.service');
 
 // Create new live class
 exports.createLiveClass = async (req, res) => {
@@ -83,6 +84,9 @@ exports.createLiveClass = async (req, res) => {
         scheduledStart 
       }
     });
+
+    // Schedule tự động kết thúc phòng khi hết thời gian
+    roomScheduler.scheduleRoomEnd(liveClass);
 
     res.status(201).json({
       success: true,
@@ -278,6 +282,9 @@ exports.startLiveClass = async (req, res) => {
         title: liveClass.title 
       }
     });
+
+    // Re-schedule auto end khi start (đề phòng server restart)
+    roomScheduler.scheduleRoomEnd(liveClass);
 
     res.json({
       success: true,

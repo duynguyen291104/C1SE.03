@@ -9,6 +9,7 @@ const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const { initializeLiveClassSocket } = require('./socket/liveClassSocketV2');
+const roomScheduler = require('./services/roomScheduler.service');
 
 // Load environment variables
 dotenv.config();
@@ -31,6 +32,9 @@ initializeLiveClassSocket(io);
 
 // Make io available to routes
 app.set('io', io);
+
+// Set Socket.IO instance cho roomScheduler
+roomScheduler.setIO(io);
 
 // Connect to MongoDB
 connectDB();
@@ -75,10 +79,14 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔌 Socket.IO enabled on /live namespace`);
+  
+  // Restore room schedules khi server khởi động
+  console.log('⏰ Restoring room schedules...');
+  await roomScheduler.restoreSchedules();
 });
 
 module.exports = { app, server, io };
