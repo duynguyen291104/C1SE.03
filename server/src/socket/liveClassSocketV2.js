@@ -41,11 +41,36 @@ const joinRoomDirectly = async (socket, liveClass, roomId, liveClassId, presence
     joinedAt: new Date()
   });
 
-  // Get current members from Redis
-  const members = await presenceManager.getRoomMembers(roomId);
+  // Get current members - USE IN-MEMORY instead of Redis (Redis may not be connected)
+  // Convert Map to array
+  const members = Array.from(room.participants.values()).map(p => ({
+    userId: p._id,
+    socketId: p.socketId,
+    fullName: p.fullName,
+    email: p.email,
+    role: p.role,
+    avatar: p.avatar,
+    joinedAt: p.joinedAt
+  }));
 
   console.log(`📊 Room ${roomId} members after adding ${socket.user.fullName}:`, members.length);
   console.log(`   Members:`, members.map(m => m.fullName).join(', '));
+
+  // Still add to Redis for future compatibility
+  try {
+    await presenceManager.addUserToRoom(roomId, socket.user._id, {
+      userId: socket.user._id,
+      socketId: socket.id,
+      fullName: socket.user.fullName,
+      email: socket.user.email,
+      role: socket.user.role,
+      avatar: socket.user.avatar,
+      joinedAt: new Date().toISOString()
+    });
+    await presenceManager.setUserSocket(roomId, socket.user._id, socket.id);
+  } catch (redisError) {
+    console.warn('⚠️ Redis not available, using in-memory only:', redisError.message);
+  }
 
   // Initialize media state (muted by default for students)
   await presenceManager.setUserMediaState(roomId, socket.user._id, {
@@ -97,7 +122,7 @@ const joinRoomDirectly = async (socket, liveClass, roomId, liveClassId, presence
       role: socket.user.role,
       avatar: socket.user.avatar
     },
-    memberCount: members.length + 1
+    memberCount: members.length // User already included in members array
   });
 
   console.log(`✅ ${socket.user.fullName} joined room ${roomId}`);
