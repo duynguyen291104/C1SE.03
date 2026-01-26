@@ -887,9 +887,6 @@ const useWebRTC = (joinToken, iceServers = []) => {
     localStream,
     remoteStreams,
     
-    // Room data
-    roomData,
-    
     // Media states
     isMicOn,
     isCameraOn,
