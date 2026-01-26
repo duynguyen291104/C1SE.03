@@ -273,12 +273,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
   // ============ Auto-start Local Stream ============
   useEffect(() => {
     if (isConnected && !localStream && roomData) {
-      // Start with camera OFF by default
-      // Teacher can enable it manually, students too
-      startLocalStream(true, false).catch(err => {
-        console.error('Failed to start local stream:', err);
-        setError('Could not access camera/microphone. Please check permissions.');
-      });
+      // ⚠️ CHANGED: Don't auto-request media - let user enable manually
+      // This prevents permission errors on page load
+      // Users can click mic/camera buttons to enable when ready
+      console.log('🎥 Room joined. Camera/mic disabled by default. Click buttons to enable.');
     }
   }, [isConnected, localStream, roomData]);
 
@@ -323,7 +321,24 @@ const useWebRTC = (joinToken, iceServers = []) => {
       return stream;
     } catch (err) {
       console.error('Error accessing media devices:', err);
-      setError('Could not access camera/microphone');
+      
+      // Better error messages based on error type
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        const errorMsg = '🚫 Quyền truy cập bị từ chối!\n\n' +
+          '📌 Cách sửa:\n' +
+          '1. Click biểu tượng 🔒 bên cạnh URL\n' +
+          '2. Cho phép Camera và Microphone\n' +
+          '3. Tải lại trang (F5)';
+        setError(errorMsg);
+        alert(errorMsg);
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        const errorMsg = '📷 Không tìm thấy camera/microphone!\n\nVui lòng kiểm tra thiết bị.';
+        setError(errorMsg);
+        alert(errorMsg);
+      } else {
+        setError('Could not access camera/microphone');
+      }
+      
       throw err;
     }
   }, []);
@@ -568,7 +583,17 @@ const useWebRTC = (joinToken, iceServers = []) => {
       return newState;
     } catch (err) {
       console.error('Error toggling microphone:', err);
-      setError('Could not access microphone');
+      
+      // Better error handling for permissions
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('🚫 Không có quyền truy cập microphone!\n\n' +
+              '📌 Cách sửa:\n' +
+              '1. Click biểu tượng 🔒 bên cạnh URL\n' +
+              '2. Cho phép "Microphone"\n' +
+              '3. Thử lại');
+      } else {
+        setError('Could not access microphone');
+      }
       return false;
     }
   }, [localStream, isMicOn, isCameraOn, startLocalStream]);
@@ -636,7 +661,17 @@ const useWebRTC = (joinToken, iceServers = []) => {
       return newState;
     } catch (err) {
       console.error('Error toggling camera:', err);
-      setError('Could not access camera');
+      
+      // Better error handling for permissions
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('🚫 Không có quyền truy cập camera!\n\n' +
+              '📌 Cách sửa:\n' +
+              '1. Click biểu tượng 🔒 bên cạnh URL\n' +
+              '2. Cho phép "Camera"\n' +
+              '3. Thử lại');
+      } else {
+        setError('Could not access camera');
+      }
       return false;
     }
   }, [localStream, isCameraOn, isMicOn, startLocalStream]);
