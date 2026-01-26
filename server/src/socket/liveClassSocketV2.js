@@ -30,15 +30,21 @@ const joinRoomDirectly = async (socket, liveClass, roomId, liveClassId, presence
     activeRooms.set(roomId, {
       liveClass,
       teacher: liveClass.teacherId,
-      participants: new Map()
+      participants: new Map() // Key = userId (NOT socketId to avoid duplicates)
     });
   }
 
   const room = activeRooms.get(roomId);
-  room.participants.set(socket.id, {
+  
+  // ⚠️ CRITICAL: Use userId as key to prevent duplicate entries on reconnect!
+  // Update socketId if user already exists (reconnection scenario)
+  room.participants.set(socket.user._id.toString(), {
     ...socket.user,
+    userId: socket.user._id.toString(),
     socketId: socket.id,
-    joinedAt: new Date()
+    joinedAt: room.participants.has(socket.user._id.toString()) 
+      ? room.participants.get(socket.user._id.toString()).joinedAt 
+      : new Date()
   });
 
   // Get current members - USE IN-MEMORY instead of Redis (Redis may not be connected)
@@ -817,7 +823,11 @@ async function handleUserLeave(socket, liveNs, presenceManager) {
     const room = activeRooms.get(roomId);
 
     if (room) {
-      room.participants.delete(socket.id);
+      // ⚠️ CRITICAL: Delete by userId (not socketId) to match join logic
+      const userId = socket.user._id.toString();
+      room.participants.delete(userId);
+
+      console.log(`👋 ${socket.user.fullName} left room. Remaining: ${room.participants.size}`);
 
       // Notify others
       socket.to(roomId).emit('room:user-left', {
@@ -826,10 +836,23 @@ async function handleUserLeave(socket, liveNs, presenceManager) {
         memberCount: room.participants.size
       });
 
-      // Clean up empty room
+      // ⚠️ CRITICAL: Clean up empty room - Delete from DB if no one left
       if (room.participants.size === 0) {
         activeRooms.delete(roomId);
         await presenceManager.cleanupRoom(roomId);
+        
+        // Delete LiveClass from database when last person leaves
+        try {
+          const LiveClass = require('../models/LiveClass');
+          await LiveClass.findByIdAndUpdate(socket.liveClassId, {
+            status: 'ended',
+            endTime: new Date()
+          });
+          console.log(`🚪 Room ${roomId} auto-ended - last participant left`);
+        } catch (err) {
+          console.error('Error auto-ending room:', err);
+        }
+        
         console.log(`🧹 Room ${roomId} cleaned up - no participants`);
       }
     }
