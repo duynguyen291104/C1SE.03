@@ -17,9 +17,6 @@ const LiveClassRoom = () => {
   const [answerText, setAnswerText] = useState({});
   const [isHost, setIsHost] = useState(false);
   const [joinToken, setJoinToken] = useState('');
-  const [isWaitingApproval, setIsWaitingApproval] = useState(false);
-  const [waitingStudents, setWaitingStudents] = useState([]);
-  const [approvalSocket, setApprovalSocket] = useState(null);
   
   // Sidebar panels state
   const [activePanel, setActivePanel] = useState(null); // 'participants', 'waiting', 'questions', 'chat'
@@ -50,7 +47,12 @@ const LiveClassRoom = () => {
     pinMessage,
     unpinMessage,
     pinVideo,
-    cleanup
+    cleanup,
+    // Approval from hook
+    isWaitingApproval,
+    waitingStudents,
+    approveStudent,
+    rejectStudent
   } = useWebRTC(joinToken);
 
   // ============ DEDUPLICATE PARTICIPANTS ============
@@ -68,20 +70,6 @@ const LiveClassRoom = () => {
     return Array.from(uniqueMap.values());
   }, [webrtcRoomData?.members]);
 
-  // ============ DEDUPLICATE WAITING STUDENTS ============
-  const uniqueWaitingStudents = useMemo(() => {
-    // Remove duplicates by userId
-    const uniqueMap = new Map();
-    waitingStudents.forEach(s => {
-      if (s && (s.userId || s.email)) {
-        const key = s.userId?.toString() || s.email;
-        uniqueMap.set(key, s);
-      }
-    });
-    
-    return Array.from(uniqueMap.values());
-  }, [waitingStudents]);
-
   // Update participants from roomData
   useEffect(() => {
     if (webrtcRoomData) {
@@ -90,81 +78,8 @@ const LiveClassRoom = () => {
       if (webrtcRoomData.isHost !== undefined) {
         setIsHost(webrtcRoomData.isHost);
       }
-
-      if (webrtcRoomData.waitingStudents) {
-        setWaitingStudents(webrtcRoomData.waitingStudents);
-      }
     }
   }, [uniqueParticipants, webrtcRoomData]);
-
-  // ============ Handle Approval & Room Events ============
-  useEffect(() => {
-    if (!joinToken) return;
-
-    const socket = io(`${SOCKET_URL}/live`, {
-      auth: { token: joinToken }
-    });
-
-    setApprovalSocket(socket);
-
-    const userStr = localStorage.getItem('user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
-    const userRole = currentUser?.roles?.[0] || 'student';
-
-    // Waiting for approval (students only)
-    socket.on('room:waiting-approval', ({ message }) => {
-      if (userRole === 'student') {
-        setIsWaitingApproval(true);
-      }
-    });
-
-    // Approved
-    socket.on('room:approved', ({ message }) => {
-      setIsWaitingApproval(false);
-      alert(message);
-    });
-
-    // Rejected
-    socket.on('room:rejected', ({ message }) => {
-      alert(message || 'Giáo viên đã từ chối yêu cầu tham gia của bạn');
-      cleanup();
-      socket.disconnect();
-      navigate('/student/classes');
-    });
-
-    // Student waiting (for host)
-    socket.on('room:student-waiting', ({ student, waitingList }) => {
-      setWaitingStudents(waitingList);
-    });
-
-    // Waiting list updated
-    socket.on('room:waiting-updated', ({ waitingStudents: updated }) => {
-      setWaitingStudents(updated);
-    });
-
-    // Room warning (30s before end)
-    socket.on('room:warning', ({ message }) => {
-      alert(`⚠️ ${message}`);
-    });
-
-    // Room ended
-    socket.on('room:ended', ({ message }) => {
-      alert(message || 'Phòng học đã kết thúc');
-      cleanup();
-      socket.disconnect();
-      
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (user.roles?.includes('teacher')) {
-        navigate('/teacher/dashboard');
-      } else {
-        navigate('/student/dashboard');
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [joinToken, navigate, cleanup, SOCKET_URL]);
 
   // ============ Load Live Class ============
   useEffect(() => {
@@ -173,6 +88,13 @@ const LiveClassRoom = () => {
       cleanup();
     };
   }, [liveClassId]); // eslint-disable-line
+
+  // ============ Handle room:rejected navigation ============
+  useEffect(() => {
+    // Room:ended and room:rejected are handled in useWebRTC
+    // We just need to navigate when isWaitingApproval becomes false due to rejection
+    // This is already handled by the alert in useWebRTC hook
+  }, []);
 
   const loadLiveClass = async () => {
     try {
@@ -236,19 +158,6 @@ const LiveClassRoom = () => {
       } else {
         navigate('/student/classes');
       }
-    }
-  };
-
-  // ============ APPROVAL FUNCTIONS ============
-  const approveStudent = (studentUserId) => {
-    if (approvalSocket && isHost) {
-      approvalSocket.emit('room:approve-student', { studentUserId });
-    }
-  };
-
-  const rejectStudent = (studentUserId) => {
-    if (approvalSocket && isHost) {
-      approvalSocket.emit('room:reject-student', { studentUserId });
     }
   };
 
@@ -344,9 +253,9 @@ const LiveClassRoom = () => {
           <span className={`status-badge ${liveClass.status}`}>
             {liveClass.status === 'live' ? '🔴 Live' : '⏸ Scheduled'}
           </span>
-          {isHost && uniqueWaitingStudents.length > 0 && (
+          {isHost && waitingStudents.length > 0 && (
             <span className="waiting-badge">
-              ⏳ {uniqueWaitingStudents.length} chờ duyệt
+              ⏳ {waitingStudents.length} chờ duyệt
             </span>
           )}
           {webrtcConnected ? (
@@ -450,9 +359,9 @@ const LiveClassRoom = () => {
               onClick={() => togglePanel('waiting')}
             >
               <div className="toolbar-icon">⏳</div>
-              <div className="toolbar-label">Chờ duyệt ({uniqueWaitingStudents.length})</div>
-              {uniqueWaitingStudents.length > 0 && (
-                <div className="toolbar-badge warning">{uniqueWaitingStudents.length}</div>
+              <div className="toolbar-label">Chờ duyệt ({waitingStudents.length})</div>
+              {waitingStudents.length > 0 && (
+                <div className="toolbar-badge warning">{waitingStudents.length}</div>
               )}
             </div>
           )}
@@ -511,17 +420,17 @@ const LiveClassRoom = () => {
       {isHost && (
         <div className={`sidebar-panel ${activePanel === 'waiting' ? 'open' : ''}`}>
           <div className="sidebar-header">
-            <h3>⏳ Chờ duyệt ({uniqueWaitingStudents.length})</h3>
+            <h3>⏳ Chờ duyệt ({waitingStudents.length})</h3>
             <button className="sidebar-close" onClick={() => setActivePanel(null)}>✕</button>
           </div>
           <div className="sidebar-content">
-            {uniqueWaitingStudents.length === 0 ? (
+            {waitingStudents.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon">⏳</div>
                 <div className="empty-state-text">Không có học sinh chờ duyệt</div>
               </div>
             ) : (
-              uniqueWaitingStudents.map((student) => (
+              waitingStudents.map((student) => (
                 <div key={student.userId?.toString() || student.email} className="waiting-item">
                   <div className="waiting-student-info">
                     <span className="student-avatar">👨‍🎓</span>

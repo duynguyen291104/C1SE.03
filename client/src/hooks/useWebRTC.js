@@ -29,6 +29,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
   const [questions, setQuestions] = useState([]);
   const [pinnedVideoUserId, setPinnedVideoUserId] = useState(null);
   
+  // Approval states
+  const [isWaitingApproval, setIsWaitingApproval] = useState(false);
+  const [waitingStudents, setWaitingStudents] = useState([]);
+  
   // Store peer connections: userId -> RTCPeerConnection
   const peerConnections = useRef(new Map());
   const socketRef = useRef(null);
@@ -69,6 +73,19 @@ const useWebRTC = (joinToken, iceServers = []) => {
       roomIdRef.current = data.roomId;
       console.log('✅ roomIdRef set to:', roomIdRef.current);
       
+      // Sync waiting students if host
+      if (data.waitingStudents) {
+        // Deduplicate by userId
+        const uniqueMap = new Map();
+        data.waitingStudents.forEach(s => {
+          if (s && (s.userId || s.email)) {
+            const key = s.userId?.toString() || s.email;
+            uniqueMap.set(key, s);
+          }
+        });
+        setWaitingStudents(Array.from(uniqueMap.values()));
+      }
+      
       // Initialize peer connections for existing members
       data.members.forEach(member => {
         if (member.userId !== data.user?.userId) {
@@ -87,6 +104,51 @@ const useWebRTC = (joinToken, iceServers = []) => {
     newSocket.on('room:user-left', ({ userId, userName }) => {
       console.log('👋 User left:', userName);
       closePeerConnection(userId);
+    });
+
+    // ============ APPROVAL EVENTS ============
+    newSocket.on('room:waiting-approval', ({ message }) => {
+      console.log('⏳ Waiting for approval:', message);
+      setIsWaitingApproval(true);
+    });
+
+    newSocket.on('room:approved', ({ message, roomId }) => {
+      console.log('✅ Approved by teacher:', message);
+      setIsWaitingApproval(false);
+      // DO NOT call joinRoom again - server already called joinRoomDirectly
+      // Just wait for room:joined event which will come automatically
+    });
+
+    newSocket.on('room:rejected', ({ message }) => {
+      console.log('❌ Rejected by teacher:', message);
+      alert(message || 'Giáo viên đã từ chối yêu cầu tham gia của bạn');
+      cleanup();
+    });
+
+    newSocket.on('room:student-waiting', ({ student, waitingList }) => {
+      console.log('👨‍🎓 Student waiting:', student?.fullName);
+      // Deduplicate by userId
+      const uniqueMap = new Map();
+      (waitingList || []).forEach(s => {
+        if (s && (s.userId || s.email)) {
+          const key = s.userId?.toString() || s.email;
+          uniqueMap.set(key, s);
+        }
+      });
+      setWaitingStudents(Array.from(uniqueMap.values()));
+    });
+
+    newSocket.on('room:waiting-updated', ({ waitingStudents: updated }) => {
+      console.log('📝 Waiting list updated:', updated?.length || 0);
+      // Deduplicate by userId
+      const uniqueMap = new Map();
+      (updated || []).forEach(s => {
+        if (s && (s.userId || s.email)) {
+          const key = s.userId?.toString() || s.email;
+          uniqueMap.set(key, s);
+        }
+      });
+      setWaitingStudents(Array.from(uniqueMap.values()));
     });
 
     // WebRTC signaling events
@@ -780,6 +842,19 @@ const useWebRTC = (joinToken, iceServers = []) => {
     }
   }, []);
 
+  // ============ APPROVAL FUNCTIONS ============
+  const approveStudent = useCallback((studentUserId) => {
+    if (!socketRef.current) return;
+    console.log('✅ Approving student:', studentUserId);
+    socketRef.current.emit('room:approve-student', { studentUserId });
+  }, []);
+
+  const rejectStudent = useCallback((studentUserId) => {
+    if (!socketRef.current) return;
+    console.log('❌ Rejecting student:', studentUserId);
+    socketRef.current.emit('room:reject-student', { studentUserId });
+  }, []);
+
   // ============ Cleanup ============
   const cleanup = useCallback(() => {
     // Stop all tracks
@@ -801,6 +876,12 @@ const useWebRTC = (joinToken, iceServers = []) => {
     isConnected,
     roomData,
     error,
+    
+    // Approval
+    isWaitingApproval,
+    waitingStudents,
+    approveStudent,
+    rejectStudent,
     
     // Streams
     localStream,
