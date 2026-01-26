@@ -64,6 +64,7 @@ const useWebRTC = (joinToken, iceServers = []) => {
     newSocket.on('room:joined', (data) => {
       console.log('🎉 Joined room:', data);
       console.log('🔑 Setting roomId:', data.roomId);
+      console.log('👥 Members in room:', data.members?.length || 0, data.members);
       setRoomData(data);
       roomIdRef.current = data.roomId;
       console.log('✅ roomIdRef set to:', roomIdRef.current);

@@ -44,6 +44,9 @@ const joinRoomDirectly = async (socket, liveClass, roomId, liveClassId, presence
   // Get current members from Redis
   const members = await presenceManager.getRoomMembers(roomId);
 
+  console.log(`📊 Room ${roomId} members after adding ${socket.user.fullName}:`, members.length);
+  console.log(`   Members:`, members.map(m => m.fullName).join(', '));
+
   // Initialize media state (muted by default for students)
   await presenceManager.setUserMediaState(roomId, socket.user._id, {
     microphone: socket.user.role === 'teacher', // Teacher unmuted by default
