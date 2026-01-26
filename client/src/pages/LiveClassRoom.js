@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
@@ -10,25 +10,24 @@ const LiveClassRoom = () => {
   const { liveClassId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const socketRef = useRef(null);
   
   const [liveClass, setLiveClass] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [answerText, setAnswerText] = useState({});
-  const [isConnected, setIsConnected] = useState(false);
-  const [isTeacher, setIsTeacher] = useState(false);
   const [isHost, setIsHost] = useState(false);
-  const [roomId, setRoomId] = useState('');
   const [joinToken, setJoinToken] = useState('');
   const [isWaitingApproval, setIsWaitingApproval] = useState(false);
   const [waitingStudents, setWaitingStudents] = useState([]);
   const [approvalSocket, setApprovalSocket] = useState(null);
   
+  // Sidebar panels state
+  const [activePanel, setActivePanel] = useState(null); // 'participants', 'waiting', 'questions', 'chat'
+  
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
 
-  // WebRTC Hook - chỉ cần joinToken, hook tự tìm SOCKET_URL
+  // WebRTC Hook
   const {
     localStream,
     remoteStreams,
@@ -54,118 +53,94 @@ const LiveClassRoom = () => {
     cleanup
   } = useWebRTC(joinToken);
 
-  // Update participants and host status from roomData
+  // ============ DEDUPLICATE PARTICIPANTS ============
+  const uniqueParticipants = useMemo(() => {
+    if (!webrtcRoomData?.members) return [];
+    
+    // Remove duplicates by userId
+    const uniqueMap = new Map();
+    webrtcRoomData.members.forEach(p => {
+      if (p && p.userId) {
+        uniqueMap.set(p.userId, p);
+      }
+    });
+    
+    return Array.from(uniqueMap.values());
+  }, [webrtcRoomData?.members]);
+
+  // Update participants from roomData
   useEffect(() => {
     if (webrtcRoomData) {
-      if (webrtcRoomData.members) {
-        setParticipants(webrtcRoomData.members);
-        console.log('👥 Participants updated:', webrtcRoomData.members.length, webrtcRoomData.members);
-      }
+      setParticipants(uniqueParticipants);
       
-      // Set isHost flag
       if (webrtcRoomData.isHost !== undefined) {
         setIsHost(webrtcRoomData.isHost);
-        console.log('🎯 Is Host:', webrtcRoomData.isHost);
       }
 
-      // Set waiting students if host
       if (webrtcRoomData.waitingStudents) {
         setWaitingStudents(webrtcRoomData.waitingStudents);
-        console.log('⏳ Waiting students:', webrtcRoomData.waitingStudents.length);
       }
     }
-  }, [webrtcRoomData]);
+  }, [uniqueParticipants, webrtcRoomData]);
 
-  // Debug: Log messages when they change
-  useEffect(() => {
-    console.log('💬 Messages updated:', webrtcMessages.length, webrtcMessages);
-  }, [webrtcMessages]);
-
-  // ============ Handle Room Warning & Ended Events ============
+  // ============ Handle Approval & Room Events ============
   useEffect(() => {
     if (!joinToken) return;
 
-    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
     const socket = io(`${SOCKET_URL}/live`, {
       auth: { token: joinToken }
     });
 
     setApprovalSocket(socket);
 
-    // Get current user to check role
     const userStr = localStorage.getItem('user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
     const userRole = currentUser?.roles?.[0] || 'student';
 
-    // ⏳ Waiting for approval (ONLY for students)
+    // Waiting for approval (students only)
     socket.on('room:waiting-approval', ({ message }) => {
-      console.log('⏳ Waiting for approval event received. User role:', userRole);
-      
-      // CHỈ student mới hiện waiting screen
       if (userRole === 'student') {
-        console.log('⏳ Setting waiting approval to true');
         setIsWaitingApproval(true);
-      } else {
-        console.log('⚠️ Teacher received waiting-approval event - ignoring');
       }
     });
 
-    // ✅ Approved by host
+    // Approved
     socket.on('room:approved', ({ message }) => {
-      console.log('✅ Approved:', message);
       setIsWaitingApproval(false);
       alert(message);
-      // Socket sẽ tự động join room sau khi được approve
     });
 
-    // ❌ Rejected by host
+    // Rejected
     socket.on('room:rejected', ({ message }) => {
-      console.log('❌ Rejected:', message);
       alert(message || 'Giáo viên đã từ chối yêu cầu tham gia của bạn');
       cleanup();
       socket.disconnect();
       navigate('/student/classes');
     });
 
-    // 👥 Student waiting (for host)
+    // Student waiting (for host)
     socket.on('room:student-waiting', ({ student, waitingList }) => {
-      console.log('👥 Student waiting:', student);
       setWaitingStudents(waitingList);
     });
 
-    // 📝 Waiting list updated (for host)
+    // Waiting list updated
     socket.on('room:waiting-updated', ({ waitingStudents: updated }) => {
-      console.log('📝 Waiting list updated:', updated);
       setWaitingStudents(updated);
     });
 
-    // ⚠️ Cảnh báo 30 giây trước khi kết thúc
-    socket.on('room:warning', ({ message, secondsRemaining }) => {
-      console.log('⚠️ Room warning event received:', message);
-      
-      // Hiển thị cảnh báo nổi bật
+    // Room warning (30s before end)
+    socket.on('room:warning', ({ message }) => {
       alert(`⚠️ ${message}`);
-      
-      // Có thể thêm toast notification hoặc countdown timer UI
-      // toast.warning(message, { autoClose: 30000 });
     });
 
-    // 🚪 Phòng kết thúc
+    // Room ended
     socket.on('room:ended', ({ message }) => {
-      console.log('🚪 Room ended event received:', message);
-      
-      // Hiển thị thông báo
       alert(message || 'Phòng học đã kết thúc');
-      
-      // Cleanup
       cleanup();
       socket.disconnect();
       
-      // Redirect về trang phù hợp
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      
-      if (user && user.roles && user.roles.includes('teacher')) {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (user.roles?.includes('teacher')) {
         navigate('/teacher/dashboard');
       } else {
         navigate('/student/dashboard');
@@ -175,17 +150,15 @@ const LiveClassRoom = () => {
     return () => {
       socket.disconnect();
     };
-  }, [joinToken, navigate, cleanup]);
+  }, [joinToken, navigate, cleanup, SOCKET_URL]);
 
+  // ============ Load Live Class ============
   useEffect(() => {
     loadLiveClass();
     return () => {
-      cleanup(); // Cleanup WebRTC
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      cleanup();
     };
-  }, [liveClassId]);
+  }, [liveClassId]); // eslint-disable-line
 
   const loadLiveClass = async () => {
     try {
@@ -193,21 +166,17 @@ const LiveClassRoom = () => {
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       
-      // Check for joinToken from navigation state (student joining)
       const navJoinToken = location.state?.joinToken;
       if (navJoinToken) {
         setJoinToken(navJoinToken);
       }
       
-      // Determine which endpoint to use based on user role
       let endpoint = '';
-      let isTeacherUser = false;
       
-      if (user && user.roles && user.roles.includes('teacher')) {
+      if (user?.roles?.includes('teacher')) {
         endpoint = `${API_URL}/live-classes/${liveClassId}`;
-        isTeacherUser = true;
         
-        // Teacher needs to join their own class to get joinToken
+        // Teacher auto-join their own class
         try {
           const joinResponse = await axios.post(
             `${API_URL}/student/live-classes/${liveClassId}/join`,
@@ -220,9 +189,7 @@ const LiveClassRoom = () => {
         }
       } else {
         endpoint = `${API_URL}/student/live-classes/${liveClassId}`;
-        isTeacherUser = false;
         
-        // If student doesn't have joinToken from navigation, try to join
         if (!navJoinToken) {
           try {
             const joinResponse = await axios.post(
@@ -243,27 +210,14 @@ const LiveClassRoom = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      const data = response.data.data;
-      setLiveClass(data);
-      
-      // Set roomId if available (for students who have joined)
-      if (data.roomId) {
-        setRoomId(data.roomId);
-      }
-      
-      // Check if current user is teacher
-      if (user && data.teacherId) {
-        setIsTeacher(user._id === data.teacherId._id || user._id === data.teacherId);
-      }
+      setLiveClass(response.data.data);
       
     } catch (error) {
       console.error('Error loading live class:', error);
       alert('Không thể tải thông tin lớp học');
       
-      // Navigate back based on user role
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      if (user && user.roles && user.roles.includes('teacher')) {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (user.roles?.includes('teacher')) {
         navigate('/teacher/create-live');
       } else {
         navigate('/student/classes');
@@ -271,106 +225,20 @@ const LiveClassRoom = () => {
     }
   };
 
-  const connectSocket = (roomId, token) => {
-    // Connect to /live namespace
-    const socket = io(`${SOCKET_URL}/live`, {
-      auth: { token }
-    });
-
-    socket.on('connect', () => {
-      console.log('Socket connected');
-      setIsConnected(true);
-      
-      // Join room
-      socket.emit('join-room', { roomId, liveClassId });
-    });
-
-    socket.on('joined-room', ({ liveClass: lc, participants: parts, isTeacher: teacher }) => {
-      console.log('Joined room successfully');
-      setParticipants(parts);
-      setIsTeacher(teacher);
-    });
-
-    socket.on('user-joined', ({ user, participantCount }) => {
-      console.log(`${user.fullName} joined`);
-      setParticipants(prev => [...prev, user]);
-    });
-
-    socket.on('user-left', ({ userName, participantCount }) => {
-      console.log(`${userName} left`);
-      setParticipants(prev => prev.filter(p => p.fullName !== userName));
-    });
-
-    socket.on('hand-raised', ({ userId, userName }) => {
-      console.log(`✋ ${userName} raised hand`);
-    });
-
-    socket.on('force-mute', () => {
-      alert('Giáo viên đã tắt micro của bạn');
-    });
-
-    socket.on('error', ({ message }) => {
-      alert(message);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
-      setIsConnected(false);
-    });
-
-    socketRef.current = socket;
-  };
-
-
-
-  const sendMessage = () => {
-    if (!currentMessage.trim()) return;
-    
-    console.log('🚀 Sending message:', currentMessage);
-    // Use WebRTC send message
-    sendWebRTCMessage(currentMessage);
-    
-    setCurrentMessage('');
-  };
-
-  const answerQuestion = (questionId) => {
-    const answer = answerText[questionId];
-    if (!answer || !answer.trim() || !socketRef.current) return;
-    
-    socketRef.current.emit('answer-question', {
-      roomId,
-      questionId,
-      answer
-    });
-    
-    setAnswerText(prev => ({ ...prev, [questionId]: '' }));
-  };
-
-  const raiseHand = () => {
-    raiseWebRTCHand();
-  };
-
-  const muteParticipant = (socketId) => {
-    if (socketRef.current && isTeacher) {
-      socketRef.current.emit('mute-participant', { roomId, socketId });
-    }
-  };
-
   // ============ APPROVAL FUNCTIONS ============
   const approveStudent = (studentUserId) => {
     if (approvalSocket && isHost) {
-      console.log('✅ Approving student:', studentUserId);
       approvalSocket.emit('room:approve-student', { studentUserId });
     }
   };
 
   const rejectStudent = (studentUserId) => {
     if (approvalSocket && isHost) {
-      console.log('❌ Rejecting student:', studentUserId);
       approvalSocket.emit('room:reject-student', { studentUserId });
     }
   };
 
+  // ============ ROOM CONTROLS ============
   const startClass = async () => {
     try {
       const token = localStorage.getItem('accessToken');
@@ -401,10 +269,22 @@ const LiveClassRoom = () => {
     }
   };
 
-  const copyJoinLink = () => {
-    const link = `${window.location.origin}/join-live/${roomId}`;
-    navigator.clipboard.writeText(link);
-    alert('Đã copy link tham gia!');
+  const sendMessage = () => {
+    if (!currentMessage.trim()) return;
+    sendWebRTCMessage(currentMessage);
+    setCurrentMessage('');
+  };
+
+  const answerQuestion = (questionId) => {
+    const answer = answerText[questionId];
+    if (!answer || !answer.trim()) return;
+    
+    // Implement answer question via WebRTC
+    setAnswerText(prev => ({ ...prev, [questionId]: '' }));
+  };
+
+  const togglePanel = (panelName) => {
+    setActivePanel(prev => prev === panelName ? null : panelName);
   };
 
   if (!liveClass) {
@@ -438,16 +318,17 @@ const LiveClassRoom = () => {
     );
   }
 
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isTeacher = user.roles?.includes('teacher');
+
   return (
     <div className="live-room-container">
+      {/* ============ HEADER ============ */}
       <div className="live-room-header">
         <div className="header-left">
           <h2>🎥 {liveClass.title}</h2>
           <span className={`status-badge ${liveClass.status}`}>
             {liveClass.status === 'live' ? '🔴 Live' : '⏸ Scheduled'}
-          </span>
-          <span className="participant-count">
-            👥 {participants.length} người tham gia
           </span>
           {isHost && waitingStudents.length > 0 && (
             <span className="waiting-badge">
@@ -455,18 +336,15 @@ const LiveClassRoom = () => {
             </span>
           )}
           {webrtcConnected ? (
-            <span className="connection-status connected">🟢 Đã kết nối</span>
+            <span className="connection-status connected">🟢 Connected</span>
           ) : (
-            <span className="connection-status disconnected">🔴 Đang kết nối...</span>
+            <span className="connection-status disconnected">🔴 Connecting...</span>
           )}
         </div>
         
         <div className="header-right">
           {isTeacher && (
             <>
-              <button onClick={copyJoinLink} className="btn-secondary">
-                📋 Copy Link
-              </button>
               {liveClass.status === 'scheduled' && (
                 <button onClick={startClass} className="btn-success">
                   ▶️ Bắt Đầu
@@ -479,20 +357,10 @@ const LiveClassRoom = () => {
               )}
             </>
           )}
-          {!isTeacher && (
-            <button onClick={raiseHand} className="btn-secondary">
-              ✋ Giơ Tay
-            </button>
-          )}
           <button 
             onClick={() => {
-              const userStr = localStorage.getItem('user');
-              const user = userStr ? JSON.parse(userStr) : null;
-              if (user && user.roles && user.roles.includes('teacher')) {
-                navigate('/teacher/create-live');
-              } else {
-                navigate('/student/classes');
-              }
+              cleanup();
+              navigate(isTeacher ? '/teacher/create-live' : '/student/classes');
             }} 
             className="btn-secondary"
           >
@@ -501,75 +369,15 @@ const LiveClassRoom = () => {
         </div>
       </div>
 
-      <div className="live-room-content">        {/* Waiting Approval Panel (Host only) */}
-        {isHost && waitingStudents.length > 0 && (
-          <div className="waiting-panel">
-            <h3>⏳ Học sinh chờ duyệt ({waitingStudents.length})</h3>
-            <div className="waiting-list">
-              {waitingStudents.map((student) => (
-                <div key={student.userId.toString()} className="waiting-item">
-                  <div className="waiting-student-info">
-                    <span className="student-avatar">👨‍🎓</span>
-                    <div className="student-details">
-                      <span className="student-name">{student.fullName}</span>
-                      <span className="student-email">{student.email}</span>
-                    </div>
-                  </div>
-                  <div className="waiting-actions">
-                    <button 
-                      onClick={() => approveStudent(student.userId.toString())}
-                      className="btn-approve"
-                      title="Chấp nhận"
-                    >
-                      ✅ Duyệt
-                    </button>
-                    <button 
-                      onClick={() => rejectStudent(student.userId.toString())}
-                      className="btn-reject"
-                      title="Từ chối"
-                    >
-                      ❌ Từ chối
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* Participants Panel */}
-        <div className="participants-panel">
-          <h3>👥 Người Tham Gia ({participants.length})</h3>
-          <div className="participants-list">
-            {participants.map((participant, index) => (
-              <div key={participant.socketId || index} className="participant-item">
-                <div className="participant-info">
-                  <span className={`role-badge ${participant.role}`}>
-                    {participant.role === 'teacher' ? '👨‍🏫' : '👨‍🎓'}
-                  </span>
-                  <span className="participant-name">{participant.fullName}</span>
-                </div>
-                {isTeacher && participant.role !== 'teacher' && (
-                  <button 
-                    onClick={() => muteParticipant(participant.socketId)}
-                    className="btn-mute"
-                    title="Tắt micro"
-                  >
-                    🔇
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="main-content">
-          {/* Video/Content Area */}
-          <div className="video-area">
+      {/* ============ MAIN CONTENT ============ */}
+      <div className="live-room-content">
+        {/* ============ VIDEO AREA (CENTER) ============ */}
+        <div className="video-main-area">
+          <div className="video-container">
             <VideoGrid
               localStream={localStream}
               remoteStreams={remoteStreams}
-              participants={participants}
+              participants={uniqueParticipants}
               currentUserId={webrtcRoomData?.user?.userId}
               localUserName={webrtcRoomData?.user?.fullName || 'You'}
               isCameraOn={isCameraOn}
@@ -579,8 +387,8 @@ const LiveClassRoom = () => {
               onPinVideo={pinVideo}
             />
             
-            {/* Video Controls */}
-            <div className="video-controls">
+            {/* Video Controls Overlay */}
+            <div className="video-controls-overlay">
               <button 
                 onClick={toggleMicrophone}
                 className={`control-btn ${isMicOn ? 'active' : 'inactive'}`}
@@ -600,125 +408,241 @@ const LiveClassRoom = () => {
               <button 
                 onClick={isScreenSharing ? stopScreenShare : startScreenShare}
                 className={`control-btn ${isScreenSharing ? 'active' : ''}`}
-                title={isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'}
+                title="Chia sẻ màn hình"
               >
                 🖥️
               </button>
               
               <div className="connection-indicator">
-                {webrtcConnected ? '🟢 Đã kết nối' : '🔴 Đang kết nối...'}
+                {webrtcConnected ? '🟢 Connected' : '🔴 Connecting...'}
               </div>
             </div>
           </div>
-
-          {/* Chat Area */}
-          {liveClass.settings.allowChat && (
-            <div className="chat-area">
-              <h3>💬 Chat</h3>
-              
-              {/* Pinned Message Banner */}
-              {webrtcMessages.find(m => m.isPinned) && (
-                <div className="pinned-message-banner">
-                  <div className="pinned-header">
-                    <span>📌 Tin nhắn đã ghim</span>
-                    {isTeacher && (
-                      <button 
-                        className="unpin-btn"
-                        onClick={() => unpinMessage()}
-                        title="Bỏ ghim"
-                      >
-                        ✖
-                      </button>
-                    )}
-                  </div>
-                  <div className="pinned-content">
-                    <strong>{webrtcMessages.find(m => m.isPinned)?.userName}:</strong>{' '}
-                    {webrtcMessages.find(m => m.isPinned)?.message}
-                  </div>
-                </div>
-              )}
-              
-              <div className="messages-container">
-                {webrtcMessages.map((msg, index) => (
-                  <div 
-                    key={msg._id || index} 
-                    className={`message ${msg.isSystem ? 'system-message' : ''} ${msg.userRole === 'teacher' ? 'teacher-message' : ''} ${msg.isPinned ? 'pinned-msg' : ''}`}
-                  >
-                    {!msg.isSystem && (
-                      <div className="message-header">
-                        <span className="message-author">{msg.userName}</span>
-                        <span className="message-time">
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </span>
-                        {isTeacher && !msg.isPinned && (
-                          <button 
-                            className="pin-msg-btn"
-                            onClick={() => pinMessage(msg._id)}
-                            title="Ghim tin nhắn"
-                          >
-                            📌
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <div className="message-content">{msg.message}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="message-input">
-                <input
-                  type="text"
-                  value={currentMessage}
-                  onChange={(e) => setCurrentMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                  placeholder="Nhập tin nhắn..."
-                />
-                <button onClick={sendMessage}>Gửi</button>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Questions Panel */}
-        {liveClass.settings.allowQuestions && (
-          <div className="questions-panel">
-            <h3>❓ Câu Hỏi ({webrtcQuestions.length})</h3>
-            <div className="questions-list">
-              {webrtcQuestions.map((q, index) => (
-                <div key={q._id || index} className={`question-item ${q.isAnswered ? 'answered' : ''}`}>
-                  <div className="question-header">
-                    <strong>{q.userName}</strong>
-                    <span>{new Date(q.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                  <div className="question-text">{q.question}</div>
-                  
-                  {q.isAnswered ? (
-                    <div className="answer-text">
-                      <strong>Trả lời:</strong> {q.answer}
-                    </div>
-                  ) : (
-                    isTeacher && (
-                      <div className="answer-input">
-                        <input
-                          type="text"
-                          placeholder="Nhập câu trả lời..."
-                          value={answerText[q._id] || ''}
-                          onChange={(e) => setAnswerText(prev => ({ 
-                            ...prev, 
-                            [q._id]: e.target.value 
-                          }))}
-                        />
-                        <button onClick={() => answerQuestion(q._id)}>
-                          Trả lời
-                        </button>
-                      </div>
-                    )
-                  )}
+        {/* ============ BOTTOM TOOLBAR ============ */}
+        <div className="bottom-toolbar">
+          <div 
+            className={`toolbar-item ${activePanel === 'participants' ? 'active' : ''}`}
+            onClick={() => togglePanel('participants')}
+          >
+            <div className="toolbar-icon">👥</div>
+            <div className="toolbar-label">Người tham gia ({uniqueParticipants.length})</div>
+          </div>
+
+          {isHost && (
+            <div 
+              className={`toolbar-item ${activePanel === 'waiting' ? 'active' : ''}`}
+              onClick={() => togglePanel('waiting')}
+            >
+              <div className="toolbar-icon">⏳</div>
+              <div className="toolbar-label">Chờ duyệt ({waitingStudents.length})</div>
+              {waitingStudents.length > 0 && (
+                <div className="toolbar-badge warning">{waitingStudents.length}</div>
+              )}
+            </div>
+          )}
+
+          <div 
+            className={`toolbar-item ${activePanel === 'questions' ? 'active' : ''}`}
+            onClick={() => togglePanel('questions')}
+          >
+            <div className="toolbar-icon">❓</div>
+            <div className="toolbar-label">Câu hỏi ({webrtcQuestions.length})</div>
+            {webrtcQuestions.filter(q => !q.isAnswered).length > 0 && (
+              <div className="toolbar-badge">{webrtcQuestions.filter(q => !q.isAnswered).length}</div>
+            )}
+          </div>
+
+          <div 
+            className={`toolbar-item ${activePanel === 'chat' ? 'active' : ''}`}
+            onClick={() => togglePanel('chat')}
+          >
+            <div className="toolbar-icon">💬</div>
+            <div className="toolbar-label">Chat</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ============ SIDEBAR PANELS ============ */}
+      
+      {/* Participants Panel */}
+      <div className={`sidebar-panel ${activePanel === 'participants' ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <h3>👥 Người tham gia ({uniqueParticipants.length})</h3>
+          <button className="sidebar-close" onClick={() => setActivePanel(null)}>✕</button>
+        </div>
+        <div className="sidebar-content">
+          {uniqueParticipants.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">👥</div>
+              <div className="empty-state-text">Chưa có người tham gia</div>
+            </div>
+          ) : (
+            uniqueParticipants.map((participant) => (
+              <div key={participant.userId} className="participant-item">
+                <div className="participant-info">
+                  <span className={`role-badge ${participant.role}`}>
+                    {participant.role === 'teacher' ? '👨‍🏫' : '👨‍🎓'}
+                  </span>
+                  <span className="participant-name">{participant.fullName}</span>
                 </div>
-              ))}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Waiting Students Panel */}
+      {isHost && (
+        <div className={`sidebar-panel ${activePanel === 'waiting' ? 'open' : ''}`}>
+          <div className="sidebar-header">
+            <h3>⏳ Chờ duyệt ({waitingStudents.length})</h3>
+            <button className="sidebar-close" onClick={() => setActivePanel(null)}>✕</button>
+          </div>
+          <div className="sidebar-content">
+            {waitingStudents.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">⏳</div>
+                <div className="empty-state-text">Không có học sinh chờ duyệt</div>
+              </div>
+            ) : (
+              waitingStudents.map((student) => (
+                <div key={student.userId?.toString() || student.email} className="waiting-item">
+                  <div className="waiting-student-info">
+                    <span className="student-avatar">👨‍🎓</span>
+                    <div className="student-details">
+                      <span className="student-name">{student.fullName}</span>
+                      <span className="student-email">{student.email}</span>
+                    </div>
+                  </div>
+                  <div className="waiting-actions">
+                    <button 
+                      onClick={() => approveStudent(student.userId?.toString())}
+                      className="btn-approve"
+                    >
+                      ✅ Duyệt
+                    </button>
+                    <button 
+                      onClick={() => rejectStudent(student.userId?.toString())}
+                      className="btn-reject"
+                    >
+                      ❌ Từ chối
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Chat Panel */}
+      <div className={`sidebar-panel ${activePanel === 'chat' ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <h3>💬 Chat</h3>
+          <button className="sidebar-close" onClick={() => setActivePanel(null)}>✕</button>
+        </div>
+        
+        {/* Pinned Message Banner */}
+        {webrtcMessages.find(m => m.isPinned) && (
+          <div className="pinned-message-banner">
+            <div className="pinned-header">
+              <span>📌 Tin nhắn đã ghim</span>
+              {isTeacher && (
+                <button className="unpin-btn" onClick={() => unpinMessage()}>✖</button>
+              )}
+            </div>
+            <div className="pinned-content">
+              <strong>{webrtcMessages.find(m => m.isPinned)?.userName}:</strong>{' '}
+              {webrtcMessages.find(m => m.isPinned)?.message}
             </div>
           </div>
         )}
+        
+        <div className="chat-messages">
+          {webrtcMessages.map((msg, index) => (
+            <div 
+              key={msg._id || index} 
+              className={`message ${msg.isSystem ? 'system-message' : ''} ${msg.userRole === 'teacher' ? 'teacher-message' : ''} ${msg.isPinned ? 'pinned-msg' : ''}`}
+            >
+              {!msg.isSystem && (
+                <div className="message-header">
+                  <span className="message-author">{msg.userName}</span>
+                  <span className="message-time">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                  {isTeacher && !msg.isPinned && (
+                    <button className="pin-msg-btn" onClick={() => pinMessage(msg._id)}>
+                      📌
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="message-content">{msg.message}</div>
+            </div>
+          ))}
+        </div>
+        
+        <div className="chat-input">
+          <input
+            type="text"
+            value={currentMessage}
+            onChange={(e) => setCurrentMessage(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            placeholder="Nhập tin nhắn..."
+          />
+          <button onClick={sendMessage}>Gửi</button>
+        </div>
+      </div>
+
+      {/* Questions Panel */}
+      <div className={`sidebar-panel ${activePanel === 'questions' ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <h3>❓ Câu hỏi ({webrtcQuestions.length})</h3>
+          <button className="sidebar-close" onClick={() => setActivePanel(null)}>✕</button>
+        </div>
+        <div className="sidebar-content">
+          {webrtcQuestions.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">❓</div>
+              <div className="empty-state-text">Chưa có câu hỏi nào</div>
+            </div>
+          ) : (
+            webrtcQuestions.map((q, index) => (
+              <div key={q._id || index} className={`question-item ${q.isAnswered ? 'answered' : ''}`}>
+                <div className="question-header">
+                  <strong>{q.userName}</strong>
+                  <span>{new Date(q.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div className="question-text">{q.question}</div>
+                
+                {q.isAnswered ? (
+                  <div className="answer-text">
+                    <strong>Trả lời:</strong> {q.answer}
+                  </div>
+                ) : (
+                  isTeacher && (
+                    <div className="answer-input">
+                      <input
+                        type="text"
+                        placeholder="Nhập câu trả lời..."
+                        value={answerText[q._id] || ''}
+                        onChange={(e) => setAnswerText(prev => ({ 
+                          ...prev, 
+                          [q._id]: e.target.value 
+                        }))}
+                      />
+                      <button onClick={() => answerQuestion(q._id)}>
+                        Trả lời
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
