@@ -229,7 +229,6 @@ const LiveClassRoom = () => {
               className="btn-secondary"
               onClick={() => {
                 cleanup();
-                if (approvalSocket) approvalSocket.disconnect();
                 navigate('/student/classes');
               }}
             >
