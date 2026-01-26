@@ -68,6 +68,20 @@ const LiveClassRoom = () => {
     return Array.from(uniqueMap.values());
   }, [webrtcRoomData?.members]);
 
+  // ============ DEDUPLICATE WAITING STUDENTS ============
+  const uniqueWaitingStudents = useMemo(() => {
+    // Remove duplicates by userId
+    const uniqueMap = new Map();
+    waitingStudents.forEach(s => {
+      if (s && (s.userId || s.email)) {
+        const key = s.userId?.toString() || s.email;
+        uniqueMap.set(key, s);
+      }
+    });
+    
+    return Array.from(uniqueMap.values());
+  }, [waitingStudents]);
+
   // Update participants from roomData
   useEffect(() => {
     if (webrtcRoomData) {
@@ -330,9 +344,9 @@ const LiveClassRoom = () => {
           <span className={`status-badge ${liveClass.status}`}>
             {liveClass.status === 'live' ? '🔴 Live' : '⏸ Scheduled'}
           </span>
-          {isHost && waitingStudents.length > 0 && (
+          {isHost && uniqueWaitingStudents.length > 0 && (
             <span className="waiting-badge">
-              ⏳ {waitingStudents.length} chờ duyệt
+              ⏳ {uniqueWaitingStudents.length} chờ duyệt
             </span>
           )}
           {webrtcConnected ? (
@@ -436,9 +450,9 @@ const LiveClassRoom = () => {
               onClick={() => togglePanel('waiting')}
             >
               <div className="toolbar-icon">⏳</div>
-              <div className="toolbar-label">Chờ duyệt ({waitingStudents.length})</div>
-              {waitingStudents.length > 0 && (
-                <div className="toolbar-badge warning">{waitingStudents.length}</div>
+              <div className="toolbar-label">Chờ duyệt ({uniqueWaitingStudents.length})</div>
+              {uniqueWaitingStudents.length > 0 && (
+                <div className="toolbar-badge warning">{uniqueWaitingStudents.length}</div>
               )}
             </div>
           )}
@@ -497,17 +511,17 @@ const LiveClassRoom = () => {
       {isHost && (
         <div className={`sidebar-panel ${activePanel === 'waiting' ? 'open' : ''}`}>
           <div className="sidebar-header">
-            <h3>⏳ Chờ duyệt ({waitingStudents.length})</h3>
+            <h3>⏳ Chờ duyệt ({uniqueWaitingStudents.length})</h3>
             <button className="sidebar-close" onClick={() => setActivePanel(null)}>✕</button>
           </div>
           <div className="sidebar-content">
-            {waitingStudents.length === 0 ? (
+            {uniqueWaitingStudents.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon">⏳</div>
                 <div className="empty-state-text">Không có học sinh chờ duyệt</div>
               </div>
             ) : (
-              waitingStudents.map((student) => (
+              uniqueWaitingStudents.map((student) => (
                 <div key={student.userId?.toString() || student.email} className="waiting-item">
                   <div className="waiting-student-info">
                     <span className="student-avatar">👨‍🎓</span>
