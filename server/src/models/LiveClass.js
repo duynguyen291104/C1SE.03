@@ -56,6 +56,24 @@ const liveClassSchema = new mongoose.Schema({
     leftAt: Date,
     duration: Number // seconds
   }],
+  // Danh sách học sinh đang chờ duyệt
+  waitingStudents: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    fullName: String,
+    email: String,
+    requestedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  // Danh sách học sinh đã được duyệt
+  approvedStudents: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   settings: {
     allowChat: {
       type: Boolean,

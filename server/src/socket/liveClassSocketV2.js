@@ -6,6 +6,100 @@ const { getPresenceManager } = require('../services/redisPresence');
 // Active rooms map (in-memory backup, primary data in Redis)
 const activeRooms = new Map();
 
+// Helper function: Join room directly (cho teacher hoặc approved student)
+const joinRoomDirectly = async (socket, liveClass, roomId, liveClassId, presenceManager, isHost) => {
+  // Join socket room
+  socket.join(roomId);
+  socket.currentRoom = roomId;
+
+  // Add to Redis presence
+  await presenceManager.addUserToRoom(roomId, socket.user._id, {
+    userId: socket.user._id,
+    socketId: socket.id,
+    fullName: socket.user.fullName,
+    email: socket.user.email,
+    role: socket.user.role,
+    avatar: socket.user.avatar,
+    joinedAt: new Date().toISOString()
+  });
+
+  await presenceManager.setUserSocket(roomId, socket.user._id, socket.id);
+
+  // Initialize room in memory if not exists
+  if (!activeRooms.has(roomId)) {
+    activeRooms.set(roomId, {
+      liveClass,
+      teacher: liveClass.teacherId,
+      participants: new Map()
+    });
+  }
+
+  const room = activeRooms.get(roomId);
+  room.participants.set(socket.id, {
+    ...socket.user,
+    socketId: socket.id,
+    joinedAt: new Date()
+  });
+
+  // Get current members from Redis
+  const members = await presenceManager.getRoomMembers(roomId);
+
+  // Initialize media state (muted by default for students)
+  await presenceManager.setUserMediaState(roomId, socket.user._id, {
+    microphone: socket.user.role === 'teacher', // Teacher unmuted by default
+    camera: false,
+    screenShare: false
+  });
+
+  // Notify user they joined successfully with full room state
+  socket.emit('room:joined', {
+    roomId,
+    liveClass: {
+      _id: liveClass._id,
+      title: liveClass.title,
+      description: liveClass.description,
+      teacherId: liveClass.teacherId ? {
+        _id: liveClass.teacherId._id,
+        fullName: liveClass.teacherId.profile?.fullName || liveClass.teacherId.email
+      } : null,
+      status: liveClass.status,
+      settings: liveClass.settings
+    },
+    user: {
+      userId: socket.user._id,
+      fullName: socket.user.fullName,
+      email: socket.user.email,
+      role: socket.user.role,
+      avatar: socket.user.avatar
+    },
+    members: members.map(m => ({
+      userId: m.userId,
+      fullName: m.fullName,
+      role: m.role,
+      avatar: m.avatar,
+      joinedAt: m.joinedAt
+    })),
+    isHost,
+    isTeacher: socket.user.role === 'teacher',
+    mediaStates: await presenceManager.getRoomMediaStates(roomId),
+    waitingStudents: isHost ? liveClass.waitingStudents : [] // Chỉ host mới thấy waiting list
+  });
+
+  // Notify all participants about new user
+  socket.to(roomId).emit('room:user-joined', {
+    user: {
+      userId: socket.user._id,
+      socketId: socket.id,
+      fullName: socket.user.fullName,
+      role: socket.user.role,
+      avatar: socket.user.avatar
+    },
+    memberCount: members.length + 1
+  });
+
+  console.log(`✅ ${socket.user.fullName} joined room ${roomId}`);
+};
+
 // Socket authentication middleware - VERIFY JWT joinToken
 const authenticateSocket = async (socket, next) => {
   try {
@@ -86,94 +180,84 @@ const initializeLiveClassSocket = (io) => {
         return socket.disconnect();
       }
 
-      // Join socket room
-      socket.join(roomId);
-      socket.currentRoom = roomId;
+      // ============ LOGIC DUYỆT HỌC SINH ============
+      const isHost = socket.user._id === liveClass.teacherId._id.toString();
+      const isTeacher = socket.user.role === 'teacher';
+      const isStudent = socket.user.role === 'student';
 
-      // Add to Redis presence
-      await presenceManager.addUserToRoom(roomId, socket.user._id, {
-        userId: socket.user._id,
-        socketId: socket.id,
-        fullName: socket.user.fullName,
-        email: socket.user.email,
-        role: socket.user.role,
-        avatar: socket.user.avatar,
-        joinedAt: new Date().toISOString()
-      });
+      console.log(`🔍 Join check: ${socket.user.fullName}`);
+      console.log(`   - User ID: ${socket.user._id}`);
+      console.log(`   - Host ID: ${liveClass.teacherId._id.toString()}`);
+      console.log(`   - Is Host: ${isHost}`);
+      console.log(`   - User Role: ${socket.user.role}`);
+      console.log(`   - Is Teacher: ${isTeacher}`);
+      console.log(`   - Is Student: ${isStudent}`);
 
-      await presenceManager.setUserSocket(roomId, socket.user._id, socket.id);
-
-      // Initialize room in memory if not exists
-      if (!activeRooms.has(roomId)) {
-        activeRooms.set(roomId, {
-          liveClass,
-          teacher: liveClass.teacherId,
-          participants: new Map()
-        });
+      // ✅ Giáo viên (host hoặc giáo viên khác) → vào thẳng
+      if (isTeacher) {
+        console.log(`👨‍🏫 Teacher ${socket.user.fullName} auto-approved`);
+        await joinRoomDirectly(socket, liveClass, roomId, liveClassId, presenceManager, isHost);
+        return;
       }
 
-      const room = activeRooms.get(roomId);
-      room.participants.set(socket.id, {
-        ...socket.user,
-        socketId: socket.id,
-        joinedAt: new Date()
-      });
+      // 🎓 Học sinh → kiểm tra approval
+      if (isStudent) {
+        // Check nếu đã được approve trước đó
+        const isApproved = liveClass.approvedStudents.some(
+          id => id.toString() === socket.user._id
+        );
 
-      // Get current members from Redis
-      const members = await presenceManager.getRoomMembers(roomId);
+        if (isApproved) {
+          console.log(`🎓 Student ${socket.user.fullName} already approved`);
+          await joinRoomDirectly(socket, liveClass, roomId, liveClassId, presenceManager, isHost);
+          return;
+        }
 
-      // Initialize media state (muted by default for students)
-      await presenceManager.setUserMediaState(roomId, socket.user._id, {
-        microphone: socket.user.role === 'teacher', // Teacher unmuted by default
-        camera: false,
-        screenShare: false
-      });
+        // Check nếu đã trong waiting list
+        const isWaiting = liveClass.waitingStudents.some(
+          s => s.userId.toString() === socket.user._id
+        );
 
-      // Notify user they joined successfully with full room state
-      socket.emit('room:joined', {
-        roomId,
-        liveClass: {
-          _id: liveClass._id,
-          title: liveClass.title,
-          description: liveClass.description,
-          teacherId: liveClass.teacherId ? {
-            _id: liveClass.teacherId._id,
-            fullName: liveClass.teacherId.profile?.fullName || liveClass.teacherId.email
-          } : null,
-          status: liveClass.status,
-          settings: liveClass.settings
-        },
-        user: {
-          userId: socket.user._id,
-          fullName: socket.user.fullName,
-          email: socket.user.email,
-          role: socket.user.role,
-          avatar: socket.user.avatar
-        },
-        members: members.map(m => ({
-          userId: m.userId,
-          fullName: m.fullName,
-          role: m.role,
-          avatar: m.avatar,
-          joinedAt: m.joinedAt
-        })),
-        isTeacher: socket.user._id === liveClass.teacherId._id.toString(),
-        mediaStates: await presenceManager.getRoomMediaStates(roomId)
-      });
+        if (!isWaiting) {
+          // Thêm vào waiting list
+          liveClass.waitingStudents.push({
+            userId: socket.user._id,
+            fullName: socket.user.fullName,
+            email: socket.user.email,
+            requestedAt: new Date()
+          });
+          await liveClass.save();
+          console.log(`⏳ Student ${socket.user.fullName} added to waiting list`);
+        }
 
-      // Notify all participants about new user
-      socket.to(roomId).emit('room:user-joined', {
-        user: {
-          userId: socket.user._id,
-          socketId: socket.id,
-          fullName: socket.user.fullName,
-          role: socket.user.role,
-          avatar: socket.user.avatar
-        },
-        memberCount: members.length + 1
-      });
+        // Gửi thông báo chờ duyệt cho học sinh
+        socket.emit('room:waiting-approval', {
+          message: 'Đang chờ giáo viên duyệt vào lớp...',
+          roomId,
+          liveClassId
+        });
 
-      console.log(`✅ ${socket.user.fullName} joined room ${roomId}`);
+        // Thông báo cho host có học sinh chờ
+        const hostSockets = await liveNs.in(roomId).fetchSockets();
+        for (const hostSocket of hostSockets) {
+          if (hostSocket.user._id === liveClass.teacherId._id.toString()) {
+            hostSocket.emit('room:student-waiting', {
+              student: {
+                userId: socket.user._id,
+                socketId: socket.id,
+                fullName: socket.user.fullName,
+                email: socket.user.email,
+                avatar: socket.user.avatar,
+                requestedAt: new Date()
+              },
+              waitingList: liveClass.waitingStudents
+            });
+          }
+        }
+
+        console.log(`⏳ Student ${socket.user.fullName} waiting for approval from host`);
+        return;
+      }
 
     } catch (error) {
       console.error('Error on connection:', error);
@@ -558,6 +642,128 @@ const initializeLiveClassSocket = (io) => {
         socket.to(socket.currentRoom).emit('hand:lowered', {
           userId: socket.user._id
         });
+      }
+    });
+
+    // ==================== APPROVAL SYSTEM ====================
+
+    // Host duyệt học sinh vào phòng
+    socket.on('room:approve-student', async ({ studentUserId }) => {
+      try {
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        if (!liveClass) {
+          return socket.emit('error', { message: 'Live class not found' });
+        }
+
+        // Chỉ host mới được duyệt
+        const isHost = socket.user._id === liveClass.teacherId.toString();
+        if (!isHost) {
+          return socket.emit('error', { message: 'Only host can approve students' });
+        }
+
+        // Xóa khỏi waiting list
+        const waitingStudent = liveClass.waitingStudents.find(
+          s => s.userId.toString() === studentUserId
+        );
+
+        liveClass.waitingStudents = liveClass.waitingStudents.filter(
+          s => s.userId.toString() !== studentUserId
+        );
+
+        // Thêm vào approved list
+        if (!liveClass.approvedStudents.includes(studentUserId)) {
+          liveClass.approvedStudents.push(studentUserId);
+        }
+
+        await liveClass.save();
+
+        console.log(`✅ Host approved student ${waitingStudent?.fullName}`);
+
+        // Tìm socket của student và cho vào phòng
+        const studentSockets = await liveNs.fetchSockets();
+        for (const studentSocket of studentSockets) {
+          if (studentSocket.user._id === studentUserId) {
+            // Join student vào phòng
+            await joinRoomDirectly(
+              studentSocket, 
+              liveClass, 
+              socket.currentRoom, 
+              socket.liveClassId, 
+              presenceManager, 
+              false
+            );
+
+            // Thông báo cho student
+            studentSocket.emit('room:approved', {
+              message: 'Bạn đã được duyệt vào lớp học!',
+              roomId: socket.currentRoom
+            });
+            break;
+          }
+        }
+
+        // Update waiting list cho host
+        socket.emit('room:waiting-updated', {
+          waitingStudents: liveClass.waitingStudents
+        });
+
+        console.log(`📝 Waiting list updated for host`);
+
+      } catch (error) {
+        console.error('Error approving student:', error);
+        socket.emit('error', { message: 'Failed to approve student' });
+      }
+    });
+
+    // Host từ chối học sinh
+    socket.on('room:reject-student', async ({ studentUserId }) => {
+      try {
+        const liveClass = await LiveClass.findById(socket.liveClassId);
+        
+        if (!liveClass) {
+          return socket.emit('error', { message: 'Live class not found' });
+        }
+
+        // Chỉ host mới được reject
+        const isHost = socket.user._id === liveClass.teacherId.toString();
+        if (!isHost) {
+          return socket.emit('error', { message: 'Only host can reject students' });
+        }
+
+        // Xóa khỏi waiting list
+        const waitingStudent = liveClass.waitingStudents.find(
+          s => s.userId.toString() === studentUserId
+        );
+
+        liveClass.waitingStudents = liveClass.waitingStudents.filter(
+          s => s.userId.toString() !== studentUserId
+        );
+
+        await liveClass.save();
+
+        console.log(`❌ Host rejected student ${waitingStudent?.fullName}`);
+
+        // Thông báo cho student
+        const studentSockets = await liveNs.fetchSockets();
+        for (const studentSocket of studentSockets) {
+          if (studentSocket.user._id === studentUserId) {
+            studentSocket.emit('room:rejected', {
+              message: 'Giáo viên đã từ chối yêu cầu tham gia của bạn'
+            });
+            studentSocket.disconnect();
+            break;
+          }
+        }
+
+        // Update waiting list cho host
+        socket.emit('room:waiting-updated', {
+          waitingStudents: liveClass.waitingStudents
+        });
+
+      } catch (error) {
+        console.error('Error rejecting student:', error);
+        socket.emit('error', { message: 'Failed to reject student' });
       }
     });
 

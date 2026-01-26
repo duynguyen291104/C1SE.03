@@ -18,8 +18,12 @@ const LiveClassRoom = () => {
   const [answerText, setAnswerText] = useState({});
   const [isConnected, setIsConnected] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [isHost, setIsHost] = useState(false);
   const [roomId, setRoomId] = useState('');
   const [joinToken, setJoinToken] = useState('');
+  const [isWaitingApproval, setIsWaitingApproval] = useState(false);
+  const [waitingStudents, setWaitingStudents] = useState([]);
+  const [approvalSocket, setApprovalSocket] = useState(null);
   
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
@@ -50,11 +54,25 @@ const LiveClassRoom = () => {
     cleanup
   } = useWebRTC(joinToken);
 
-  // Update participants from roomData
+  // Update participants and host status from roomData
   useEffect(() => {
-    if (webrtcRoomData && webrtcRoomData.members) {
-      setParticipants(webrtcRoomData.members);
-      console.log('👥 Participants updated:', webrtcRoomData.members.length, webrtcRoomData.members);
+    if (webrtcRoomData) {
+      if (webrtcRoomData.members) {
+        setParticipants(webrtcRoomData.members);
+        console.log('👥 Participants updated:', webrtcRoomData.members.length, webrtcRoomData.members);
+      }
+      
+      // Set isHost flag
+      if (webrtcRoomData.isHost !== undefined) {
+        setIsHost(webrtcRoomData.isHost);
+        console.log('🎯 Is Host:', webrtcRoomData.isHost);
+      }
+
+      // Set waiting students if host
+      if (webrtcRoomData.waitingStudents) {
+        setWaitingStudents(webrtcRoomData.waitingStudents);
+        console.log('⏳ Waiting students:', webrtcRoomData.waitingStudents.length);
+      }
     }
   }, [webrtcRoomData]);
 
@@ -70,6 +88,55 @@ const LiveClassRoom = () => {
     const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
     const socket = io(`${SOCKET_URL}/live`, {
       auth: { token: joinToken }
+    });
+
+    setApprovalSocket(socket);
+
+    // Get current user to check role
+    const userStr = localStorage.getItem('user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const userRole = currentUser?.roles?.[0] || 'student';
+
+    // ⏳ Waiting for approval (ONLY for students)
+    socket.on('room:waiting-approval', ({ message }) => {
+      console.log('⏳ Waiting for approval event received. User role:', userRole);
+      
+      // CHỈ student mới hiện waiting screen
+      if (userRole === 'student') {
+        console.log('⏳ Setting waiting approval to true');
+        setIsWaitingApproval(true);
+      } else {
+        console.log('⚠️ Teacher received waiting-approval event - ignoring');
+      }
+    });
+
+    // ✅ Approved by host
+    socket.on('room:approved', ({ message }) => {
+      console.log('✅ Approved:', message);
+      setIsWaitingApproval(false);
+      alert(message);
+      // Socket sẽ tự động join room sau khi được approve
+    });
+
+    // ❌ Rejected by host
+    socket.on('room:rejected', ({ message }) => {
+      console.log('❌ Rejected:', message);
+      alert(message || 'Giáo viên đã từ chối yêu cầu tham gia của bạn');
+      cleanup();
+      socket.disconnect();
+      navigate('/student/classes');
+    });
+
+    // 👥 Student waiting (for host)
+    socket.on('room:student-waiting', ({ student, waitingList }) => {
+      console.log('👥 Student waiting:', student);
+      setWaitingStudents(waitingList);
+    });
+
+    // 📝 Waiting list updated (for host)
+    socket.on('room:waiting-updated', ({ waitingStudents: updated }) => {
+      console.log('📝 Waiting list updated:', updated);
+      setWaitingStudents(updated);
     });
 
     // ⚠️ Cảnh báo 30 giây trước khi kết thúc
@@ -289,6 +356,21 @@ const LiveClassRoom = () => {
     }
   };
 
+  // ============ APPROVAL FUNCTIONS ============
+  const approveStudent = (studentUserId) => {
+    if (approvalSocket && isHost) {
+      console.log('✅ Approving student:', studentUserId);
+      approvalSocket.emit('room:approve-student', { studentUserId });
+    }
+  };
+
+  const rejectStudent = (studentUserId) => {
+    if (approvalSocket && isHost) {
+      console.log('❌ Rejecting student:', studentUserId);
+      approvalSocket.emit('room:reject-student', { studentUserId });
+    }
+  };
+
   const startClass = async () => {
     try {
       const token = localStorage.getItem('accessToken');
@@ -329,6 +411,33 @@ const LiveClassRoom = () => {
     return <div className="live-room-loading">Đang tải...</div>;
   }
 
+  // ============ WAITING SCREEN (Student) ============
+  if (isWaitingApproval) {
+    return (
+      <div className="live-room-container">
+        <div className="waiting-approval-screen">
+          <div className="waiting-content">
+            <div className="waiting-icon">⏳</div>
+            <h2>Đang chờ giáo viên duyệt</h2>
+            <p>Bạn đã gửi yêu cầu tham gia lớp học</p>
+            <p className="waiting-subtitle">Vui lòng đợi giáo viên phê duyệt...</p>
+            <div className="loading-spinner"></div>
+            <button 
+              className="btn-secondary"
+              onClick={() => {
+                cleanup();
+                if (approvalSocket) approvalSocket.disconnect();
+                navigate('/student/classes');
+              }}
+            >
+              ← Quay lại
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="live-room-container">
       <div className="live-room-header">
@@ -340,6 +449,11 @@ const LiveClassRoom = () => {
           <span className="participant-count">
             👥 {participants.length} người tham gia
           </span>
+          {isHost && waitingStudents.length > 0 && (
+            <span className="waiting-badge">
+              ⏳ {waitingStudents.length} chờ duyệt
+            </span>
+          )}
           {webrtcConnected ? (
             <span className="connection-status connected">🟢 Đã kết nối</span>
           ) : (
@@ -387,7 +501,41 @@ const LiveClassRoom = () => {
         </div>
       </div>
 
-      <div className="live-room-content">
+      <div className="live-room-content">        {/* Waiting Approval Panel (Host only) */}
+        {isHost && waitingStudents.length > 0 && (
+          <div className="waiting-panel">
+            <h3>⏳ Học sinh chờ duyệt ({waitingStudents.length})</h3>
+            <div className="waiting-list">
+              {waitingStudents.map((student) => (
+                <div key={student.userId.toString()} className="waiting-item">
+                  <div className="waiting-student-info">
+                    <span className="student-avatar">👨‍🎓</span>
+                    <div className="student-details">
+                      <span className="student-name">{student.fullName}</span>
+                      <span className="student-email">{student.email}</span>
+                    </div>
+                  </div>
+                  <div className="waiting-actions">
+                    <button 
+                      onClick={() => approveStudent(student.userId.toString())}
+                      className="btn-approve"
+                      title="Chấp nhận"
+                    >
+                      ✅ Duyệt
+                    </button>
+                    <button 
+                      onClick={() => rejectStudent(student.userId.toString())}
+                      className="btn-reject"
+                      title="Từ chối"
+                    >
+                      ❌ Từ chối
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Participants Panel */}
         <div className="participants-panel">
           <h3>👥 Người Tham Gia ({participants.length})</h3>
