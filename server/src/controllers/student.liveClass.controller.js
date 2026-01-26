@@ -209,7 +209,7 @@ exports.joinLiveClass = async (req, res) => {
         sub: req.user._id.toString(),
         roomId: liveClass.roomId,
         liveClassId: liveClass._id.toString(),
-        role: 'student',
+        role: req.user.roles[0] || 'student', // Use actual user role, not hardcoded 'student'
         name: req.user.profile?.fullName || req.user.email,
         email: req.user.email
       },
