@@ -1,0 +1,36 @@
+# PDF Processing
+pdfplumber==0.11.0
+PyMuPDF==1.24.0
+pytesseract==0.3.10
+opencv-python==4.9.0.80
+Pillow==10.2.0
+
+# AI & Embeddings
+openai==1.12.0
+langchain==0.1.7
+langchain-openai==0.0.5
+tiktoken==0.6.0
+faiss-cpu==1.8.0
+sentence-transformers==2.3.1
+
+# Data Validation & Processing
+pydantic==2.6.1
+pydantic-settings==2.1.0
+python-dotenv==1.0.1
+
+# Document Export
+python-docx==1.1.0
+lxml==5.1.0
+
+# Utilities
+numpy==1.26.4
+pandas==2.2.0
+tqdm==4.66.1
+python-json-logger==2.0.7
+colorlog==6.8.2
+loguru==0.7.2
+rapidfuzz==3.6.1
+
+# Text Processing
+nltk==3.8.1
+regex==2023.12.25

@@ -1,0 +1,17 @@
+exports/
+*.pyc
+__pycache__/
+*.log
+.env
+venv/
+.vscode/
+.idea/
+*.pdf
+*.docx
+*_document.json
+*_chunks.json
+*_blueprint.json
+*_matrix.json
+*_exam.json
+*_validation.json
+.DS_Store

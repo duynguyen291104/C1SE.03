@@ -1,0 +1,38 @@
+{
+  "openai": {
+    "api_key": "your-openai-api-key-here",
+    "model": "gpt-4-turbo-preview",
+    "embedding_model": "text-embedding-3-small",
+    "temperature": 0.7,
+    "max_retries": 3
+  },
+  "paths": {
+    "upload_dir": "./uploads",
+    "output_dir": "./outputs",
+    "templates_dir": "./templates"
+  },
+  "rag": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200,
+    "top_k_retrieval": 5
+  },
+  "exam_config": {
+    "global": {
+      "time_minutes": 45,
+      "total_points": 10.0,
+      "mcq_ratio": 0.6,
+      "essay_ratio": 0.4
+    },
+    "cognitive": {
+      "biet": 0.3,
+      "hieu": 0.3,
+      "vandung": 0.3,
+      "vandungcao": 0.1
+    },
+    "difficulty": {
+      "de": 0.3,
+      "tb": 0.4,
+      "kho": 0.3
+    }
+  }
+}

@@ -37,6 +37,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
   const peerConnections = useRef(new Map());
   const socketRef = useRef(null);
   const roomIdRef = useRef(null);
+  
+  // Approval locks to prevent duplicate requests
+  const approvingRef = useRef(new Set());
+  const rejectingRef = useRef(new Set());
 
   // ICE configuration
   const rtcConfig = {
@@ -94,8 +98,41 @@ const useWebRTC = (joinToken, iceServers = []) => {
       });
     });
 
-    newSocket.on('room:user-joined', ({ user }) => {
+    newSocket.on('room:user-joined', ({ user, memberCount }) => {
       console.log('👋 User joined:', user.fullName, 'userId:', user.userId);
+      console.log('   Total members now:', memberCount);
+      
+      // Update roomData to include new member
+      setRoomData(prev => {
+        if (!prev) return prev;
+        
+        // Check if user already in members (avoid duplicates)
+        const existingMember = prev.members?.find(m => m.userId === user.userId);
+        if (existingMember) {
+          console.log('   User already in members list');
+          return prev;
+        }
+        
+        // Add new member to the list
+        const updatedMembers = [
+          ...(prev.members || []),
+          {
+            userId: user.userId,
+            fullName: user.fullName,
+            role: user.role,
+            avatar: user.avatar,
+            joinedAt: new Date()
+          }
+        ];
+        
+        console.log('   Updated members list:', updatedMembers.map(m => m.fullName));
+        
+        return {
+          ...prev,
+          members: updatedMembers
+        };
+      });
+      
       // Create peer connection - it will automatically add localStream tracks if available
       const pc = createPeerConnection(user.userId, user.fullName, true);
       console.log('✅ Peer connection created for:', user.fullName, 'will create offer:', !!localStream);
@@ -103,6 +140,17 @@ const useWebRTC = (joinToken, iceServers = []) => {
 
     newSocket.on('room:user-left', ({ userId, userName }) => {
       console.log('👋 User left:', userName);
+      
+      // Update roomData to remove member
+      setRoomData(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          members: prev.members?.filter(m => m.userId !== userId) || []
+        };
+      });
+      
       closePeerConnection(userId);
     });
 
@@ -149,6 +197,22 @@ const useWebRTC = (joinToken, iceServers = []) => {
         }
       });
       setWaitingStudents(Array.from(uniqueMap.values()));
+    });
+
+    // ============ PARTICIPANTS SYNC EVENT ============
+    newSocket.on('room:participants-updated', ({ members, participantCount }) => {
+      console.log('👥 Participants updated:', participantCount, 'members');
+      console.log('   Members list:', members.map(m => `${m.fullName} (${m.userId})`));
+      
+      // Replace entire members list to ensure sync
+      setRoomData(prev => {
+        if (!prev) return prev;
+        
+        return {
+          ...prev,
+          members: members || []
+        };
+      });
     });
 
     // WebRTC signaling events
@@ -379,6 +443,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         }
       });
 
+      // ✅ Emit initial media state to server
+      socketRef.current?.emit('media:toggle-mic', { enabled: audioEnabled });
+      socketRef.current?.emit('media:toggle-camera', { enabled: videoEnabled });
+      
       console.log(`🎥 Local stream started (mic: ${audioEnabled}, camera: ${videoEnabled})`);
       return stream;
     } catch (err) {
@@ -609,6 +677,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
           track.enabled = newState;
         });
         setIsMicOn(newState);
+        
+        // ✅ Emit to server to broadcast to all users
+        socketRef.current?.emit('media:toggle-mic', { enabled: newState });
+        
         console.log(`🎤 Microphone ${newState ? 'ON' : 'OFF'}`);
       } else if (newState) {
         // Thêm audio track mới
@@ -639,6 +711,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         }
         
         setIsMicOn(true);
+        
+        // ✅ Emit to server to broadcast to all users
+        socketRef.current?.emit('media:toggle-mic', { enabled: true });
+        
         console.log('🎤 Microphone ON - track enabled:', audioTrack.enabled);
       }
       
@@ -681,6 +757,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
           track.enabled = newState;
         });
         setIsCameraOn(newState);
+        
+        // ✅ Emit to server to broadcast to all users
+        socketRef.current?.emit('media:toggle-camera', { enabled: newState });
+        
         console.log(`📷 Camera ${newState ? 'ON' : 'OFF'}`);
       } else if (newState) {
         // Thêm video track mới
@@ -717,6 +797,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         }
         
         setIsCameraOn(true);
+        
+        // ✅ Emit to server to broadcast to all users
+        socketRef.current?.emit('media:toggle-camera', { enabled: true });
+        
         console.log('📷 Camera ON - track enabled:', videoTrack.enabled, 'ready state:', videoTrack.readyState);
       }
       
@@ -844,15 +928,94 @@ const useWebRTC = (joinToken, iceServers = []) => {
 
   // ============ APPROVAL FUNCTIONS ============
   const approveStudent = useCallback((studentUserId) => {
-    if (!socketRef.current) return;
+    if (!socketRef.current || !roomIdRef.current) return;
+    
+    // Check if already processing this student
+    if (approvingRef.current.has(studentUserId)) {
+      console.log('⚠️ Already approving this student (ref lock), ignoring:', studentUserId);
+      return;
+    }
+    
+    // Add to processing set
+    approvingRef.current.add(studentUserId);
     console.log('✅ Approving student:', studentUserId);
-    socketRef.current.emit('room:approve-student', { studentUserId });
+    
+    // Optimistic update: remove from waiting list immediately
+    setWaitingStudents(prev => {
+      const filtered = prev.filter(s => {
+        const key = s.userId?.toString() || s.email;
+        return key !== studentUserId;
+      });
+      console.log('  Optimistic: removed from waiting, new count:', filtered.length);
+      return filtered;
+    });
+    
+    // Emit with ACK callback (Socket.IO v4 syntax)
+    console.log('📤 Emitting room:approve-student with studentUserId:', studentUserId);
+    socketRef.current.emit(
+      'room:approve-student',
+      { studentUserId },
+      (response) => {
+        console.log('📥 ACK received from server:', response);
+        if (response?.error) {
+          console.error('❌ Approve failed:', response.error);
+          setError(response.error);
+          // Rollback: fetch waiting list again on next update
+        } else {
+          console.log('✅ Approve acknowledged by server');
+        }
+      }
+    );
+    
+    // Clear lock after 3 seconds
+    setTimeout(() => {
+      approvingRef.current.delete(studentUserId);
+    }, 3000);
   }, []);
 
   const rejectStudent = useCallback((studentUserId) => {
-    if (!socketRef.current) return;
+    if (!socketRef.current || !roomIdRef.current) return;
+    
+    // Check if already processing this student
+    if (rejectingRef.current.has(studentUserId)) {
+      console.log('⚠️ Already rejecting this student (ref lock), ignoring:', studentUserId);
+      return;
+    }
+    
+    // Add to processing set
+    rejectingRef.current.add(studentUserId);
     console.log('❌ Rejecting student:', studentUserId);
-    socketRef.current.emit('room:reject-student', { studentUserId });
+    
+    // Optimistic update: remove from waiting list immediately
+    setWaitingStudents(prev => {
+      const filtered = prev.filter(s => {
+        const key = s.userId?.toString() || s.email;
+        return key !== studentUserId;
+      });
+      console.log('  Optimistic: removed from waiting, new count:', filtered.length);
+      return filtered;
+    });
+    
+    // Emit with ACK callback (Socket.IO v4 syntax)
+    console.log('📤 Emitting room:reject-student with studentUserId:', studentUserId);
+    socketRef.current.emit(
+      'room:reject-student',
+      { studentUserId },
+      (response) => {
+        console.log('📥 ACK received from server:', response);
+        if (response?.error) {
+          console.error('❌ Reject failed:', response.error);
+          setError(response.error);
+        } else {
+          console.log('✅ Reject acknowledged by server');
+        }
+      }
+    );
+    
+    // Clear lock after 3 seconds
+    setTimeout(() => {
+      rejectingRef.current.delete(studentUserId);
+    }, 3000);
   }, []);
 
   // ============ Cleanup ============

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import io from 'socket.io-client';
 import axios from 'axios';
 import useWebRTC from '../hooks/useWebRTC';
 import VideoGrid from '../components/VideoGrid';
@@ -20,6 +19,13 @@ const LiveClassRoom = () => {
   
   // Sidebar panels state
   const [activePanel, setActivePanel] = useState(null); // 'participants', 'waiting', 'questions', 'chat'
+  
+  // Approval action states (to prevent double-click)
+  const [approvingStudents, setApprovingStudents] = useState(new Set());
+  const [rejectingStudents, setRejectingStudents] = useState(new Set());
+  
+  // Ref to prevent joinToken from changing and causing socket reconnect
+  const joinTokenRef = useRef('');
   
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
@@ -96,61 +102,120 @@ const LiveClassRoom = () => {
     // This is already handled by the alert in useWebRTC hook
   }, []);
 
+  // Helper to set joinToken only once (prevent socket reconnect)
+  const setJoinTokenOnce = (token) => {
+    if (!token) return;
+    if (joinTokenRef.current === token) return; // Already set
+    if (joinTokenRef.current) return; // Already have a token, keep it stable
+    
+    joinTokenRef.current = token;
+    setJoinToken(token);
+    console.log('✅ Join token set:', token.substring(0, 20) + '...');
+  };
+
   const loadLiveClass = async () => {
     try {
       const token = localStorage.getItem('accessToken');
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
-      
+
+      if (!token) {
+        alert('Bạn chưa đăng nhập hoặc token đã hết hạn.');
+        navigate('/login');
+        return;
+      }
+
+      // 1) Priority: use token from navigation state (only set once)
       const navJoinToken = location.state?.joinToken;
       if (navJoinToken) {
-        setJoinToken(navJoinToken);
+        setJoinTokenOnce(navJoinToken);
       }
-      
+
+      const isTeacher = user?.roles?.includes('teacher');
       let endpoint = '';
-      
-      if (user?.roles?.includes('teacher')) {
-        endpoint = `${API_URL}/live-classes/${liveClassId}`;
-        
-        // Teacher auto-join their own class
-        try {
-          const joinResponse = await axios.post(
-            `${API_URL}/student/live-classes/${liveClassId}/join`,
-            {},
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          setJoinToken(joinResponse.data.data.joinToken);
-        } catch (err) {
-          console.error('Teacher join error:', err);
-        }
-      } else {
-        endpoint = `${API_URL}/student/live-classes/${liveClassId}`;
-        
-        if (!navJoinToken) {
+
+      // 2) Get joinToken from API only if we DON'T have one yet
+      if (!joinTokenRef.current) {
+        if (isTeacher) {
+          endpoint = `${API_URL}/live-classes/${liveClassId}`;
+
+          // ✅ Teacher: call correct teacher join endpoint
+          // Try in order: teacher join -> general join
+          let joinResponse = null;
+
+          try {
+            // Try teacher-specific endpoint first
+            joinResponse = await axios.post(
+              `${API_URL}/teacher/live-classes/${liveClassId}/join`,
+              {},
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            console.log('✅ Teacher joined via teacher endpoint');
+          } catch (e1) {
+            console.log('Teacher endpoint not available, trying general endpoint');
+            try {
+              // Fallback to general endpoint
+              joinResponse = await axios.post(
+                `${API_URL}/live-classes/${liveClassId}/join`,
+                {},
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              console.log('✅ Teacher joined via general endpoint');
+            } catch (e2) {
+              console.error('Teacher join error:', e2);
+              // Don't try student endpoint - that causes 401
+            }
+          }
+
+          const jt = joinResponse?.data?.data?.joinToken || joinResponse?.data?.joinToken;
+          if (jt) {
+            setJoinTokenOnce(jt);
+          } else {
+            console.warn('⚠️ No joinToken received for teacher');
+          }
+        } else {
+          // Student: use student endpoint
+          endpoint = `${API_URL}/student/live-classes/${liveClassId}`;
+
           try {
             const joinResponse = await axios.post(
               `${API_URL}/student/live-classes/${liveClassId}/join`,
               {},
               { headers: { Authorization: `Bearer ${token}` } }
             );
-            setJoinToken(joinResponse.data.data.joinToken);
+            const jt = joinResponse?.data?.data?.joinToken || joinResponse?.data?.joinToken;
+            if (jt) {
+              setJoinTokenOnce(jt);
+            }
+            console.log('✅ Student joined successfully');
           } catch (err) {
+            console.error('Student join error:', err);
             alert('Không thể tham gia lớp học. Vui lòng thử lại.');
             navigate('/student/classes');
             return;
           }
         }
+      } else {
+        // Already have token, just set endpoint to fetch class data
+        endpoint = isTeacher
+          ? `${API_URL}/live-classes/${liveClassId}`
+          : `${API_URL}/student/live-classes/${liveClassId}`;
       }
-      
+
+      // 3) Fetch live class info
       const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       setLiveClass(response.data.data);
       
     } catch (error) {
       console.error('Error loading live class:', error);
-      alert('Không thể tải thông tin lớp học');
+      
+      // Only alert if it's not a token/join issue we already handled
+      if (error.response?.status !== 401) {
+        alert('Không thể tải thông tin lớp học');
+      }
       
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       if (user.roles?.includes('teacher')) {
@@ -208,6 +273,51 @@ const LiveClassRoom = () => {
 
   const togglePanel = (panelName) => {
     setActivePanel(prev => prev === panelName ? null : panelName);
+  };
+
+  // Wrapper functions with debounce protection
+  const handleApproveStudent = (e, studentUserId) => {
+    e?.stopPropagation(); // Prevent event bubbling
+    
+    if (approvingStudents.has(studentUserId)) {
+      console.log('⚠️ Already approving this student, ignoring duplicate click');
+      return;
+    }
+    
+    console.log('🔵 Approving student:', studentUserId);
+    setApprovingStudents(prev => new Set(prev).add(studentUserId));
+    approveStudent(studentUserId);
+    
+    // Clear the flag after 2 seconds
+    setTimeout(() => {
+      setApprovingStudents(prev => {
+        const next = new Set(prev);
+        next.delete(studentUserId);
+        return next;
+      });
+    }, 2000);
+  };
+
+  const handleRejectStudent = (e, studentUserId) => {
+    e?.stopPropagation(); // Prevent event bubbling
+    
+    if (rejectingStudents.has(studentUserId)) {
+      console.log('⚠️ Already rejecting this student, ignoring duplicate click');
+      return;
+    }
+    
+    console.log('🔴 Rejecting student:', studentUserId);
+    setRejectingStudents(prev => new Set(prev).add(studentUserId));
+    rejectStudent(studentUserId);
+    
+    // Clear the flag after 2 seconds
+    setTimeout(() => {
+      setRejectingStudents(prev => {
+        const next = new Set(prev);
+        next.delete(studentUserId);
+        return next;
+      });
+    }, 2000);
   };
 
   if (!liveClass) {
@@ -440,16 +550,18 @@ const LiveClassRoom = () => {
                   </div>
                   <div className="waiting-actions">
                     <button 
-                      onClick={() => approveStudent(student.userId?.toString())}
+                      onClick={(e) => handleApproveStudent(e, student.userId?.toString())}
                       className="btn-approve"
+                      disabled={approvingStudents.has(student.userId?.toString())}
                     >
-                      ✅ Duyệt
+                      {approvingStudents.has(student.userId?.toString()) ? '⏳' : '✅'} Duyệt
                     </button>
                     <button 
-                      onClick={() => rejectStudent(student.userId?.toString())}
+                      onClick={(e) => handleRejectStudent(e, student.userId?.toString())}
                       className="btn-reject"
+                      disabled={rejectingStudents.has(student.userId?.toString())}
                     >
-                      ❌ Từ chối
+                      {rejectingStudents.has(student.userId?.toString()) ? '⏳' : '❌'} Từ chối
                     </button>
                   </div>
                 </div>
