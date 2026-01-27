@@ -85,64 +85,64 @@ class ExamValidator:
         issues = []
         
         for q in exam.questions:
-            # Check stem
-            if not q.stem or len(q.stem.strip()) < 10:
+            # Check statement
+            if not q.statement or len(q.statement.strip()) < 10:
                 issues.append(ValidationIssue(
-                    question_id=q.id,
+                    question_id=q.question_id,
                     severity="error",
                     message="Câu hỏi quá ngắn hoặc trống",
                     suggestion="Viết lại câu hỏi rõ ràng hơn"
                 ))
             
             # Check MCQ
-            if q.type in ["mcq_single", "mcq_multiple"]:
+            if q.question_type in ["mcq_single", "mcq_multiple"]:
                 if not q.options or len(q.options) < 2:
                     issues.append(ValidationIssue(
-                        question_id=q.id,
+                        question_id=q.question_id,
                         severity="error",
                         message="MCQ phải có ít nhất 2 lựa chọn"
                     ))
                 
                 if q.options and len(q.options) != len(set(q.options)):
                     issues.append(ValidationIssue(
-                        question_id=q.id,
+                        question_id=q.question_id,
                         severity="warning",
                         message="Có lựa chọn trùng lặp"
                     ))
                 
                 # Check answer format
-                if q.type == "mcq_single":
-                    if q.answer not in ["A", "B", "C", "D", "E", "F"]:
+                if q.question_type == "mcq_single":
+                    if q.correct_answer not in ["A", "B", "C", "D", "E", "F"]:
                         issues.append(ValidationIssue(
-                            question_id=q.id,
+                            question_id=q.question_id,
                             severity="error",
-                            message=f"Đáp án '{q.answer}' không hợp lệ cho MCQ"
+                            message=f"Đáp án '{q.correct_answer}' không hợp lệ cho MCQ"
                         ))
                     
                     # Check if answer exists in options
                     answer_letters = ["A", "B", "C", "D", "E", "F"]
                     if q.options:
-                        answer_idx = answer_letters.index(q.answer) if q.answer in answer_letters else -1
+                        answer_idx = answer_letters.index(q.correct_answer) if q.correct_answer in answer_letters else -1
                         if answer_idx >= len(q.options):
                             issues.append(ValidationIssue(
-                                question_id=q.id,
+                                question_id=q.question_id,
                                 severity="error",
-                                message=f"Đáp án {q.answer} vượt quá số lựa chọn"
+                                message=f"Đáp án {q.correct_answer} vượt quá số lựa chọn"
                             ))
             
             # Check answer
-            if not q.answer or len(q.answer.strip()) == 0:
+            if not q.correct_answer or len(q.correct_answer.strip()) == 0:
                 issues.append(ValidationIssue(
-                    question_id=q.id,
+                    question_id=q.question_id,
                     severity="error",
                     message="Câu hỏi không có đáp án"
                 ))
             
             # Check essay rubric
-            if q.type in ["short_answer", "essay"]:
+            if q.question_type in ["short_answer", "essay"]:
                 if not q.rubric:
                     issues.append(ValidationIssue(
-                        question_id=q.id,
+                        question_id=q.question_id,
                         severity="warning",
                         message="Câu tự luận nên có rubric"
                     ))
@@ -150,7 +150,7 @@ class ExamValidator:
             # Check points
             if q.points <= 0:
                 issues.append(ValidationIssue(
-                    question_id=q.id,
+                    question_id=q.question_id,
                     severity="error",
                     message="Điểm câu hỏi phải > 0"
                 ))
@@ -158,7 +158,7 @@ class ExamValidator:
             # Check source trace
             if not q.source_trace:
                 issues.append(ValidationIssue(
-                    question_id=q.id,
+                    question_id=q.question_id,
                     severity="info",
                     message="Câu hỏi không có truy vết nguồn"
                 ))
@@ -169,17 +169,17 @@ class ExamValidator:
         """Kiểm tra câu hỏi trùng lặp"""
         issues = []
         
-        stems = [q.stem for q in exam.questions]
+        statements = [q.statement for q in exam.questions]
         
         for i, q1 in enumerate(exam.questions):
             for j, q2 in enumerate(exam.questions[i+1:], start=i+1):
-                similarity = self._text_similarity(q1.stem, q2.stem)
+                similarity = self._text_similarity(q1.statement, q2.statement)
                 
                 if similarity > self.similarity_threshold:
                     issues.append(ValidationIssue(
-                        question_id=f"{q1.id},{q2.id}",
+                        question_id=f"{q1.question_id},{q2.question_id}",
                         severity="warning",
-                        message=f"Câu {q1.id} và {q2.id} có nội dung tương tự ({similarity:.0%})",
+                        message=f"Câu {q1.question_id} và {q2.question_id} có nội dung tương tự ({similarity:.0%})",
                         suggestion="Kiểm tra và loại bỏ câu trùng lặp"
                     ))
         
@@ -216,7 +216,7 @@ class ExamValidator:
         
         # Count by type
         for q in exam.questions:
-            stats["by_type"][q.type] = stats["by_type"].get(q.type, 0) + 1
+            stats["by_type"][q.question_type] = stats["by_type"].get(q.question_type, 0) + 1
             stats["by_cognitive_level"][q.cognitive_level] = stats["by_cognitive_level"].get(q.cognitive_level, 0) + 1
             stats["by_difficulty"][q.difficulty] = stats["by_difficulty"].get(q.difficulty, 0) + 1
         

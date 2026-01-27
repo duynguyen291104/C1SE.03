@@ -80,6 +80,7 @@ class Blueprint(BaseModel):
     grade: Optional[int] = None
     term: Optional[str] = None
     topics: List[Topic]
+    outcomes: List[LearningOutcome] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -97,26 +98,26 @@ class CognitiveRatios(BaseModel):
     """Tỷ lệ mức độ nhận thức"""
     biet: float = 0.3  # Biết
     hieu: float = 0.3  # Hiểu
-    vandung: float = 0.3  # Vận dụng
-    vandungcao: float = 0.1  # Vận dụng cao
+    van_dung: float = 0.3  # Vận dụng
+    van_dung_cao: float = 0.1  # Vận dụng cao
 
 
 class DifficultyRatios(BaseModel):
     """Tỷ lệ độ khó"""
     de: float = 0.3
-    tb: float = 0.4
+    trung_binh: float = 0.4
     kho: float = 0.3
 
 
 class MatrixItem(BaseModel):
     """Một dòng trong ma trận đề"""
-    row_id: str
+    item_id: str  # ID of matrix row
     topic_id: str
     outcome_ids: List[str] = Field(default_factory=list)
-    cognitive_level: Literal["biet", "hieu", "vandung", "vandungcao"]
-    difficulty: Literal["de", "tb", "kha", "kho"]
-    type: Literal["mcq_single", "mcq_multiple", "true_false", "fill_blank", "short_answer", "essay"]
-    n_questions: int
+    cognitive_level: Literal["biet", "hieu", "van_dung", "van_dung_cao"]
+    difficulty: Literal["de", "trung_binh", "kho"]
+    question_type: Literal["mcq_single", "mcq_multiple", "true_false", "fill_blank", "short_answer", "essay"]
+    num_questions: int
     points_each: float
     source_trace: List[SourceTrace] = Field(default_factory=list)
 
@@ -126,7 +127,7 @@ class ExamMatrix(BaseModel):
     global_config: GlobalConfig
     cognitive_ratios: CognitiveRatios
     difficulty_ratios: DifficultyRatios
-    items_plan: List[MatrixItem]
+    items: List[MatrixItem]  # Changed from items_plan to items
     created_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -141,14 +142,15 @@ class QuestionRubric(BaseModel):
 
 class Question(BaseModel):
     """Một câu hỏi"""
-    id: str
-    type: Literal["mcq_single", "mcq_multiple", "true_false", "fill_blank", "short_answer", "essay"]
-    topic_id: str
-    cognitive_level: Literal["biet", "hieu", "vandung", "vandungcao"]
-    difficulty: Literal["de", "tb", "kha", "kho"]
-    stem: str  # Câu hỏi
+    question_id: str
+    question_type: Literal["mcq_single", "mcq_multiple", "true_false", "fill_blank", "short_answer", "essay"]
+    topic_id: Optional[str] = None
+    cognitive_level: Literal["biet", "hieu", "van_dung", "van_dung_cao"]
+    difficulty: Literal["de", "trung_binh", "kho"]
+    statement: str  # Câu hỏi (đổi từ stem)
     options: Optional[List[str]] = None  # Cho MCQ: ["A. ...", "B. ...", ...]
-    answer: str  # Đáp án đúng (A/B/C/D hoặc text cho tự luận)
+    correct_answer: Optional[str] = None  # Đáp án đúng (A/B/C/D)
+    suggested_answer: Optional[str] = None  # Đáp án gợi ý cho tự luận
     explanation: Optional[str] = None  # Giải thích
     rubric: Optional[QuestionRubric] = None  # Thang điểm cho tự luận
     source_trace: List[SourceTrace] = Field(default_factory=list)
