@@ -11,7 +11,7 @@ from datetime import datetime
 
 from openai import OpenAI
 
-from .config import get_settings
+from .config import get_config
 from .models import GlobalConfig, CognitiveRatios, DifficultyRatios, ExportRequest
 from .pdf_parser import PDFParser, TextCleaner
 from .rag_indexer import TextChunker, RAGIndexer
