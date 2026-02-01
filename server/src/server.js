@@ -67,6 +67,7 @@ app.use('/api/quizzes', require('./routes/quiz.routes'));
 app.use('/api/student/quizzes', require('./routes/student.quiz.routes'));
 app.use('/api/student/live-classes', require('./routes/student.liveClass.routes'));
 app.use('/api/live-classes', require('./routes/liveClass.routes'));
+app.use('/api/live-classes', require('./routes/liveClassApproval.routes')); // Approval API
 app.use('/api/materials', require('./routes/material.routes'));
 
 // Error handling middleware

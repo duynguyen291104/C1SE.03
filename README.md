@@ -100,6 +100,12 @@ C1SE.03/
 - [Quick Start Guide](./QUICKSTART.md) - Hướng dẫn nhanh
 - [Demo Accounts](./DEMO_ACCOUNTS.md) - Tài khoản demo
 - [Teacher API Documentation](./API_TEACHER.md) - API cho giáo viên
+- [**Chat Fix Summary**](./FIX_SUMMARY.md) - ✅ Fix lỗi chat realtime & stack overflow
+- [**Chat Fix Guide**](./CHAT_FIX_GUIDE.md) - Hướng dẫn test & troubleshoot
+- [**Student Approval System (2 Tables)**](./APPROVAL_SYSTEM_2_TABLES.md) - ✅ Hệ thống duyệt học sinh với 2 DB riêng biệt
+- [**Strict Approval Logic**](./APPROVAL_STRICT_LOGIC.txt) - ✅ Logic duyệt DUY NHẤT - Học sinh LUÔN chờ duyệt mỗi lần join
+- [**Implementation Summary**](./IMPLEMENTATION_SUMMARY_2TABLES.md) - Tóm tắt triển khai
+- [**Quick Reference**](./APPROVAL_QUICK_REF.txt) - Tham khảo nhanh
 - [API Documentation](./API.md) - API endpoints (sắp có)
 
 ## 🔧 Development
@@ -162,6 +168,9 @@ sudo docker compose up -d --build
   - [x] Create Live Classes
   - [x] Materials Management
   - [x] Teacher Dashboard
+  - [x] **Live Class Chat Realtime** ✅
+  - [x] **WebRTC Video/Audio** ✅
+  - [x] **Fix Stack Overflow Issues** ✅
   
 - [ ] Phase 3: Course Management
   - [ ] Create/edit courses

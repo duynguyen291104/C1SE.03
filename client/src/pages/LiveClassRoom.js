@@ -30,7 +30,7 @@ const LiveClassRoom = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
   const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
 
-  // WebRTC Hook
+  // WebRTC Hook - MUST be declared BEFORE using any of its values
   const {
     localStream,
     remoteStreams,
@@ -60,6 +60,14 @@ const LiveClassRoom = () => {
     approveStudent,
     rejectStudent
   } = useWebRTC(joinToken);
+
+  // Debug: log messages changes (AFTER webrtcMessages is declared)
+  useEffect(() => {
+    console.log('💬 LiveClassRoom: webrtcMessages updated:', {
+      count: webrtcMessages.length,
+      messages: webrtcMessages
+    });
+  }, [webrtcMessages]);
 
   // ============ DEDUPLICATE PARTICIPANTS ============
   const uniqueParticipants = useMemo(() => {

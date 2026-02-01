@@ -1,0 +1,32 @@
+{
+  "subject": "Toán học",
+  "grade": null,
+  "term": null,
+  "topics": [
+    {
+      "topic_id": "topic_1",
+      "name": "CHƯƠNG 1: Giới thiệu về chủ đề",
+      "outcomes": [],
+      "keywords": [],
+      "subtopics": []
+    }
+  ],
+  "outcomes": [
+    {
+      "outcome_id": "outcome_1",
+      "verb": "nhận biết",
+      "statement": "Học sinh biết/hiểu/vận dụng...",
+      "cognitive_level_hint": [
+        "biet|hieu|vandung"
+      ],
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ]
+    }
+  ],
+  "created_at": "2026-01-28T01:12:50.662293"
+}

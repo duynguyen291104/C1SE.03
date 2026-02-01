@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const LiveClass = require('../models/LiveClass');
 const User = require('../models/User');
+const LiveRoomWaiting = require('../models/LiveRoomWaiting');
+const LiveRoomParticipants = require('../models/LiveRoomParticipants');
 const { getPresenceManager } = require('../services/redisPresence');
 
 // Active rooms map (in-memory backup, primary data in Redis)
@@ -233,43 +235,27 @@ const initializeLiveClassSocket = (io) => {
         return;
       }
 
-      // 🎓 Học sinh → kiểm tra approval
+      // 🎓 Học sinh → LUÔN LUÔN vào trạng thái CHỜ DUYỆT (LOGIC MỚI - CHUẨN 100%)
       if (isStudent) {
-        // Check nếu đã là participant (đã join trước đó)
-        const isParticipant = liveClass.participants.some(
-          p => p.userId.toString() === socket.user._id
-        );
+        console.log(`🎓 Student ${socket.user.fullName} requesting to join - MUST WAIT for approval`);
         
-        // Check nếu đã được approve trước đó
-        const isApproved = liveClass.approvedStudents.some(
-          id => id.toString() === socket.user._id
-        );
-
-        if (isParticipant || isApproved) {
-          console.log(`🎓 Student ${socket.user.fullName} already participant (DB check)`);
-          console.log(`   isParticipant: ${isParticipant}, isApproved: ${isApproved}`);
-          await joinRoomDirectly(socket, liveClass, roomId, liveClassId, presenceManager, isHost);
-          return;
-        }
-
-        // Check nếu đã trong waiting list
-        const isWaiting = liveClass.waitingStudents.some(
-          s => s.userId.toString() === socket.user._id
-        );
+        // ⏳ CHECK BẢNG "CHỜ DUYỆT" - Nếu chưa có thì thêm vào
+        const isWaiting = await LiveRoomWaiting.isWaiting(roomId, socket.user._id);
 
         if (!isWaiting) {
-          // Thêm vào waiting list
-          liveClass.waitingStudents.push({
-            userId: socket.user._id,
+          // Tạo record trong bảng CHỜ DUYỆT
+          await LiveRoomWaiting.create({
+            roomId,
+            liveClassId,
+            studentId: socket.user._id,
             fullName: socket.user.fullName,
             email: socket.user.email,
-            requestedAt: new Date()
+            avatar: socket.user.avatar,
+            status: 'waiting'
           });
-          liveClass.markModified('waitingStudents'); // ✅ CRITICAL: Mongoose must know to save
-          await liveClass.save();
-          console.log(`⏳ Student ${socket.user.fullName} added to waiting list`);
+          console.log(`⏳ Student ${socket.user.fullName} added to WAITING table`);
         } else {
-          console.log(`⏳ Student ${socket.user.fullName} already in waiting list`);
+          console.log(`⏳ Student ${socket.user.fullName} already in WAITING table - still waiting`);
         }
 
         // Mark socket as NOT approved yet (so handlers will reject actions)
@@ -283,8 +269,10 @@ const initializeLiveClassSocket = (io) => {
           liveClassId
         });
 
-        // Thông báo cho host có học sinh chờ
+        // Lấy danh sách waiting từ DB và thông báo cho host
+        const waitingList = await LiveRoomWaiting.getWaitingList(roomId);
         const hostSockets = await liveNs.in(roomId).fetchSockets();
+        
         for (const hostSocket of hostSockets) {
           if (hostSocket.user._id === liveClass.teacherId._id.toString()) {
             hostSocket.emit('room:student-waiting', {
@@ -296,7 +284,13 @@ const initializeLiveClassSocket = (io) => {
                 avatar: socket.user.avatar,
                 requestedAt: new Date()
               },
-              waitingList: liveClass.waitingStudents
+              waitingList: waitingList.map(w => ({
+                userId: w.studentId._id,
+                fullName: w.fullName,
+                email: w.email,
+                avatar: w.avatar,
+                requestedAt: w.requestedAt
+              }))
             });
           }
         }
@@ -452,11 +446,47 @@ const initializeLiveClassSocket = (io) => {
       }
     });
 
+    // ==================== DEBUG: Catch-all event listener ====================
+    socket.onAny((eventName, ...args) => {
+      console.log(`🔔 Socket event received: "${eventName}"`, args.length > 0 ? args[0] : '');
+    });
+    
+    // Test ping handler
+    socket.on('test:ping', (data) => {
+      console.log('🏓 test:ping received!', data);
+      socket.emit('test:pong', { timestamp: Date.now() });
+    });
+
     // ==================== CHAT ====================
 
     socket.on('chat:send', async ({ message }) => {
-      if (!socket.currentRoom || socket.isApproved === false) return;
+      console.log('🔔 chat:send event received!');
+      console.log('   currentRoom:', socket.currentRoom);
+      console.log('   isApproved:', socket.isApproved);
+      console.log('   message:', message);
+      
+      if (!socket.currentRoom || socket.isApproved === false) {
+        console.log('❌ Rejected - currentRoom:', socket.currentRoom, 'isApproved:', socket.isApproved);
+        return;
+      }
+      
       try {
+        console.log('📩 Chat received from:', socket.user.fullName, '(', socket.user.role, ')');
+        console.log('   Message:', message);
+        console.log('   Current room:', socket.currentRoom);
+        console.log('   Socket ID:', socket.id);
+        
+        // Get room members for debugging
+        const io = socket.server;
+        const liveNs = io.of('/live');
+        const room = liveNs.adapter.rooms.get(socket.currentRoom);
+        if (room) {
+          console.log('   Room members count:', room.size);
+          console.log('   Room member socket IDs:', Array.from(room));
+        } else {
+          console.log('   ⚠️ Room not found in adapter!');
+        }
+        
         if (!socket.currentRoom) {
           console.log('❌ No currentRoom');
           return;
@@ -509,9 +539,17 @@ const initializeLiveClassSocket = (io) => {
         };
 
         console.log('✅ Broadcasting chat message to room:', socket.currentRoom);
+        console.log('📤 Message data:', {
+          _id: broadcastMessage._id,
+          userName: broadcastMessage.userName,
+          message: broadcastMessage.message,
+          roomId: socket.currentRoom
+        });
 
         // Broadcast to ALL in room (including sender)
         liveNs.to(socket.currentRoom).emit('chat:message', broadcastMessage);
+        
+        console.log('✅ chat:message event emitted successfully');
       } catch (err) {
         console.error('❌ Chat error:', err);
         socket.emit('error', { message: 'Failed to send message' });
@@ -745,56 +783,58 @@ const initializeLiveClassSocket = (io) => {
           return;
         }
 
-        // Xóa khỏi waiting list
-        const waitingStudent = liveClass.waitingStudents.find(
-          s => s.userId.toString() === studentUserId.toString()
-        );
+        const roomId = liveClass.roomId;
 
-        if (!waitingStudent) {
-          console.log('❌ Student not found in waiting list');
+        // 1️⃣ Xóa khỏi bảng CHỜ DUYỆT
+        const waitingRecord = await LiveRoomWaiting.findOne({
+          roomId,
+          studentId: studentUserId,
+          status: 'waiting'
+        });
+
+        if (!waitingRecord) {
+          console.log('❌ Student not found in waiting table');
           const error = { error: 'Student not in waiting list' };
           socket.emit('error', { message: error.error });
           if (callback) callback(error);
           return;
         }
 
-        liveClass.waitingStudents = liveClass.waitingStudents.filter(
-          s => s.userId.toString() !== studentUserId.toString()
-        );
-        
-        console.log(`   After filter: ${liveClass.waitingStudents.length} students waiting`);
+        await LiveRoomWaiting.deleteOne({ _id: waitingRecord._id });
+        console.log(`✅ Removed from WAITING table`);
 
-        // Thêm vào approved list
-        const studentObjectId = studentUserId.toString();
-        if (!liveClass.approvedStudents.some(id => id.toString() === studentObjectId)) {
-          liveClass.approvedStudents.push(studentUserId);
-          console.log(`   Added to approvedStudents`);
-        }
+        // 2️⃣ Thêm vào bảng ĐÃ THAM GIA
+        const existingParticipant = await LiveRoomParticipants.findOne({
+          roomId,
+          studentId: studentUserId
+        });
 
-        // Thêm vào participants list nếu chưa có
-        if (!liveClass.participants.some(p => p.userId.toString() === studentObjectId)) {
-          liveClass.participants.push({
-            userId: studentUserId,
-            joinedAt: new Date()
+        if (!existingParticipant) {
+          await LiveRoomParticipants.create({
+            roomId,
+            liveClassId: socket.liveClassId,
+            studentId: studentUserId,
+            fullName: waitingRecord.fullName,
+            email: waitingRecord.email,
+            avatar: waitingRecord.avatar,
+            approvedBy: socket.user._id,
+            approvedAt: new Date(),
+            joinedAt: new Date(),
+            isOnline: true
           });
-          console.log(`   Added to participants`);
+          console.log(`✅ Added to PARTICIPANTS table`);
+        } else {
+          // Update lại status nếu đã tồn tại
+          existingParticipant.isOnline = true;
+          existingParticipant.joinedAt = new Date();
+          existingParticipant.leftAt = null;
+          await existingParticipant.save();
+          console.log(`✅ Updated existing participant to online`);
         }
 
-        // 🔥 CRITICAL: Mark modified để Mongoose save sub-documents
-        liveClass.markModified('waitingStudents');
-        liveClass.markModified('approvedStudents');
-        liveClass.markModified('participants');
-        
-        const saveResult = await liveClass.save();
-        console.log(`✅ DB saved successfully`);
-        console.log(`   Waiting students in DB: ${saveResult.waitingStudents.length}`);
-        console.log(`   Participants in DB: ${saveResult.participants.length}`);
-        console.log(`   Approved students in DB: ${saveResult.approvedStudents.length}`);
+        console.log(`✅ Host approved student ${waitingRecord.fullName}`);
 
-        console.log(`✅ Host approved student ${waitingStudent?.fullName}`);
-        console.log(`   Student added to participants and approved list`);
-
-        // Tìm socket của student và cho vào phòng
+        // 3️⃣ Tìm socket của student và cho vào phòng
         const studentSockets = await liveNs.fetchSockets();
         console.log(`   Searching for student socket among ${studentSockets.length} connected sockets`);
         
@@ -821,7 +861,7 @@ const initializeLiveClassSocket = (io) => {
               roomId: socket.currentRoom
             });
             
-            console.log(`   ✅ Student ${waitingStudent.fullName} joined room successfully`);
+            console.log(`   ✅ Student ${waitingRecord.fullName} joined room successfully`);
             break;
           }
         }
@@ -830,14 +870,29 @@ const initializeLiveClassSocket = (io) => {
           console.log(`   ⚠️ Student socket not found. Student may have disconnected.`);
         }
 
+        // 4️⃣ Lấy danh sách waiting mới từ DB và broadcast
+        const updatedWaitingList = await LiveRoomWaiting.getWaitingList(socket.currentRoom);
+        
         // Update waiting list cho host
         socket.emit('room:waiting-updated', {
-          waitingStudents: liveClass.waitingStudents
+          waitingStudents: updatedWaitingList.map(w => ({
+            userId: w.studentId._id,
+            fullName: w.fullName,
+            email: w.email,
+            avatar: w.avatar,
+            requestedAt: w.requestedAt
+          }))
         });
 
         // Broadcast to all in room that waiting list changed
         socket.to(socket.currentRoom).emit('room:waiting-updated', {
-          waitingStudents: liveClass.waitingStudents
+          waitingStudents: updatedWaitingList.map(w => ({
+            userId: w.studentId._id,
+            fullName: w.fullName,
+            email: w.email,
+            avatar: w.avatar,
+            requestedAt: w.requestedAt
+          }))
         });
 
         console.log(`📝 Waiting list updated for host and all participants`);
@@ -854,7 +909,7 @@ const initializeLiveClassSocket = (io) => {
     });
 
     // Host từ chối học sinh
-    socket.on('room:reject-student', async ({ studentUserId }, callback) => {
+    socket.on('room:reject-student', async ({ studentUserId, reason }, callback) => {
       console.log(`🔥 RECEIVED room:reject-student event for student: ${studentUserId}`);
       
       try {
@@ -877,47 +932,67 @@ const initializeLiveClassSocket = (io) => {
           return;
         }
 
-        // Xóa khỏi waiting list
-        const waitingStudent = liveClass.waitingStudents.find(
-          s => s.userId.toString() === studentUserId.toString()
-        );
+        const roomId = liveClass.roomId;
 
-        if (!waitingStudent) {
-          console.log('❌ Student not found in waiting list');
+        // 1️⃣ Tìm record trong bảng CHỜ DUYỆT
+        const waitingRecord = await LiveRoomWaiting.findOne({
+          roomId,
+          studentId: studentUserId,
+          status: 'waiting'
+        });
+
+        if (!waitingRecord) {
+          console.log('❌ Student not found in waiting table');
           const error = { error: 'Student not in waiting list' };
           socket.emit('error', { message: error.error });
           if (callback) callback(error);
           return;
         }
 
-        liveClass.waitingStudents = liveClass.waitingStudents.filter(
-          s => s.userId.toString() !== studentUserId.toString()
-        );
+        // 2️⃣ Update status thành 'rejected' (lưu lại lịch sử)
+        waitingRecord.status = 'rejected';
+        waitingRecord.rejectedAt = new Date();
+        waitingRecord.rejectedBy = socket.user._id;
+        waitingRecord.rejectReason = reason || 'Không được phê duyệt';
+        await waitingRecord.save();
 
-        await liveClass.save();
+        console.log(`❌ Host rejected student ${waitingRecord.fullName}`);
 
-        console.log(`❌ Host rejected student ${waitingStudent?.fullName}`);
-
-        // Thông báo cho student
+        // 3️⃣ Thông báo cho student
         const studentSockets = await liveNs.fetchSockets();
         for (const studentSocket of studentSockets) {
           if (studentSocket.user._id.toString() === studentUserId.toString()) {
             studentSocket.emit('room:rejected', {
-              message: 'Giáo viên đã từ chối yêu cầu tham gia của bạn'
+              message: waitingRecord.rejectReason
             });
             studentSocket.disconnect();
             break;
           }
         }
 
+        // 4️⃣ Lấy danh sách waiting mới và broadcast
+        const updatedWaitingList = await LiveRoomWaiting.getWaitingList(roomId);
+
         // Update waiting list cho host
         socket.emit('room:waiting-updated', {
-          waitingStudents: liveClass.waitingStudents
+          waitingStudents: updatedWaitingList.map(w => ({
+            userId: w.studentId._id,
+            fullName: w.fullName,
+            email: w.email,
+            avatar: w.avatar,
+            requestedAt: w.requestedAt
+          }))
         });
 
         // Broadcast to all in room
         socket.to(socket.currentRoom).emit('room:waiting-updated', {
-          waitingStudents: liveClass.waitingStudents
+          waitingStudents: updatedWaitingList.map(w => ({
+            userId: w.studentId._id,
+            fullName: w.fullName,
+            email: w.email,
+            avatar: w.avatar,
+            requestedAt: w.requestedAt
+          }))
         });
 
         console.log(`📝 Waiting list updated after rejection`);

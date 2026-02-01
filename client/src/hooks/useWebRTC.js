@@ -271,8 +271,18 @@ const useWebRTC = (joinToken, iceServers = []) => {
 
     // Chat & Q&A events
     newSocket.on('chat:message', (message) => {
-      console.log('💬 New message:', message);
-      setMessages(prev => [...prev, message]);
+      console.log('💬 New message received:', {
+        message,
+        currentMessagesCount: messages.length,
+        messageContent: message.message,
+        userName: message.userName,
+        timestamp: message.timestamp
+      });
+      setMessages(prev => {
+        const updated = [...prev, message];
+        console.log('💬 Messages state updated. New count:', updated.length);
+        return updated;
+      });
     });
 
     newSocket.on('qa:new-question', (question) => {
@@ -678,8 +688,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         });
         setIsMicOn(newState);
         
-        // ✅ Emit to server to broadcast to all users
-        socketRef.current?.emit('media:toggle-mic', { enabled: newState });
+        // ✅ Emit to server to broadcast to all users (simple boolean only)
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('media:toggle-mic', { enabled: newState });
+        }
         
         console.log(`🎤 Microphone ${newState ? 'ON' : 'OFF'}`);
       } else if (newState) {
@@ -712,8 +724,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         
         setIsMicOn(true);
         
-        // ✅ Emit to server to broadcast to all users
-        socketRef.current?.emit('media:toggle-mic', { enabled: true });
+        // ✅ Emit to server to broadcast to all users (simple boolean only)
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('media:toggle-mic', { enabled: true });
+        }
         
         console.log('🎤 Microphone ON - track enabled:', audioTrack.enabled);
       }
@@ -758,8 +772,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         });
         setIsCameraOn(newState);
         
-        // ✅ Emit to server to broadcast to all users
-        socketRef.current?.emit('media:toggle-camera', { enabled: newState });
+        // ✅ Emit to server to broadcast to all users (simple boolean only)
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('media:toggle-camera', { enabled: newState });
+        }
         
         console.log(`📷 Camera ${newState ? 'ON' : 'OFF'}`);
       } else if (newState) {
@@ -798,8 +814,10 @@ const useWebRTC = (joinToken, iceServers = []) => {
         
         setIsCameraOn(true);
         
-        // ✅ Emit to server to broadcast to all users
-        socketRef.current?.emit('media:toggle-camera', { enabled: true });
+        // ✅ Emit to server to broadcast to all users (simple boolean only)
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('media:toggle-camera', { enabled: true });
+        }
         
         console.log('📷 Camera ON - track enabled:', videoTrack.enabled, 'ready state:', videoTrack.readyState);
       }
@@ -874,27 +892,35 @@ const useWebRTC = (joinToken, iceServers = []) => {
       message, 
       roomId: roomIdRef.current, 
       hasSocket: !!socketRef.current,
-      socketConnected: socketRef.current?.connected
+      socketConnected: socketRef.current?.connected,
+      socketId: socketRef.current?.id
     });
     
     if (!roomIdRef.current) {
       console.error('❌ No roomId!');
+      alert('Không thể gửi tin nhắn: Chưa join room');
       return;
     }
     
     if (!socketRef.current) {
       console.error('❌ No socket!');
+      alert('Không thể gửi tin nhắn: Không có kết nối socket');
       return;
     }
     
     if (!socketRef.current.connected) {
       console.error('❌ Socket not connected!');
+      alert('Không thể gửi tin nhắn: Socket chưa kết nối');
       return;
     }
     
-    console.log('✅ Emitting chat:send event...');
+    // Test: Emit cả event khác để xem server có nhận không
+    console.log('🧪 Testing server responsiveness...');
+    socketRef.current.emit('test:ping', { timestamp: Date.now() });
+    
+    console.log('✅ Emitting chat:send event with message:', message);
     socketRef.current.emit('chat:send', { message });
-    console.log('✅ Event emitted!');
+    console.log('✅ Event emitted! Waiting for chat:message response...');
   }, []);
 
   const askQuestion = useCallback((question) => {

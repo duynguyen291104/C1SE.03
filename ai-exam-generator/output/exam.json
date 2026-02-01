@@ -1,0 +1,609 @@
+{
+  "exam_id": "exam_20260128_012121",
+  "title": "Đề kiểm tra - 45 phút",
+  "subject": "Toán học",
+  "grade": 9,
+  "time_minutes": 45,
+  "total_points": 10.0,
+  "questions": [
+    {
+      "question_id": "item_000",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "biet",
+      "difficulty": "de",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương đầu tiên, tên của chương được ghi là:",
+      "options": [
+        "Chương 1",
+        "Chương 2",
+        "Chương 3",
+        "Chương 4"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Giải thích tại sao đáp án A là đúng dựa trên thông tin từ tài liệu",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_002",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "biet",
+      "difficulty": "de",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương 1 của sách có đề cập đến các khái niệm nào sau đây?",
+      "options": [
+        "a) Khoa học",
+        "b) Vật lý",
+        "c) Hóa học",
+        "d) Tiếng Anh"
+      ],
+      "correct_answer": "c) Hóa học",
+      "suggested_answer": null,
+      "explanation": "Trong tài liệu đề cập đến chương 1 của sách là về hóa học, nên đáp án C là đúng nhất.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_003",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "biet",
+      "difficulty": "de",
+      "statement": "[CHƯƠNG 1] Định nghĩa của từ 'chunk' được miêu tả ở trang...",
+      "options": [
+        "Đáp án A: chunk là một đoạn văn bản ngắn gọn mà không bị đứt gãy.",
+        "Đáp án B: chunk chỉ mối liên kết giữa các phần trong một đoạn văn bản.",
+        "Đáp án C: chunk đại diện cho một đoạn mã nguồn nhỏ trong lập trình.",
+        "Đáp án D: chunk được hiểu là một đơn vị cấu thành của ngôn ngữ lập trình."
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Đáp án A chính xác nhất. Theo tài liệu, 'chunk' ở đây được giải thích là một đoạn văn bản ngắn gọn mà không bị đứt gãy, mô tả cách tiếp cận về ngôn ngữ học và sử dụng trong các tài liệu học thuật như tài liệu này.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_004",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "biet",
+      "difficulty": "de",
+      "statement": "[CHƯƠNG 1:] Trong chương này, khái niệm chính được đề cập đầu tiên là gì?",
+      "options": [
+        "Đáp án A: Định nghĩa cơ bản của Chương 1",
+        "Đáp án B: Một khái niệm khác liên quan đến Chương 1",
+        "Đáp án C: Khái niệm không liên quan đến Chương 1 nhưng được đưa ra ở đầu chương",
+        "Đáp án D: Không có bất kỳ khái niệm nào được đề cập"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Giải thích tại sao đáp án A là đúng và các đáp án khác không đúng dựa trên thông tin trong tài liệu.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_005",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "biet",
+      "difficulty": "de",
+      "statement": "Trong chương 1 của sách, học sinh cần biết điều gì đầu tiên?",
+      "options": [
+        "Định nghĩa về chương 1",
+        "Các ví dụ trong chương 1",
+        "Hướng dẫn giải bài tập",
+        "Công thức quan trọng"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Trong tài liệu được cung cấp, không có thông tin cụ thể nào để xác định đâu là điều đầu tiên học sinh cần biết. Vì vậy, chúng tôi đã sử dụng 'Định nghĩa về chương 1' làm đáp án chính vì đây thường là điểm khởi đầu cho bất kỳ chương sách mới nào.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_006",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "biet",
+      "difficulty": "de",
+      "statement": "[CHƯƠNG 1] Phần mở đầu của chương này đề cập đến...",
+      "options": [
+        "Đáp án A: Giới thiệu về mục tiêu của chương",
+        "Đáp án B: Tổng quan về nội dung chương sắp tới",
+        "Đáp án C: Lịch trình học tập cho các bài trong chương",
+        "Đáp án D: Hướng dẫn sử dụng tài liệu học tập"
+      ],
+      "correct_answer": "B",
+      "suggested_answer": null,
+      "explanation": "Trong tài liệu cung cấp ở trang 1, Chương 1 được mô tả như một tổng quan về nội dung chương sắp tới. Điều này cho thấy đáp án B là phù hợp nhất với thông tin trong tài liệu.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_007",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "[CHƯƠNG 1: Hãy chọn đáp án có nghĩa gần nhất với định nghĩa của từ 'chunk' trên trang 1] Chunk là...",
+      "options": [
+        "Đáp án A: Một tập hợp các chuỗi ký tự trong một tệp văn bản",
+        "Đáp án B: Một chuỗi ký tự trong một tệp văn bản",
+        "Đáp án C: Một tập hợp các từ tiếng Việt trong một bài viết",
+        "Đáp án D: Một tập hợp các từ tiếng Anh trong một đoạn văn"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Chunk được định nghĩa là một tập hợp các chuỗi ký tự trong một tệp văn bản. Điều này cho thấy 'chunk' thường liên quan đến cấu trúc của lời nói và văn bản, không cần thiết phải liên quan tới ngôn ngữ cụ thể.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_008",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương 1 của sách giáo trình, nội dung nào sau đây được đề cập?",
+      "options": [
+        "Đáp án A: Định luật bảo toàn động lượng",
+        "Đáp án B: Lý thuyết biến thiên trong vật lý nhiệt độ",
+        "Đáp án C: Nguyên lý lực tác dụng song song với các vật tiếp xúc",
+        "Đáp án D: Đạo đức và quan hệ cộng đồng"
+      ],
+      "correct_answer": "B",
+      "suggested_answer": null,
+      "explanation": "Trong tài liệu đề cập đến chương 1 của sách giáo trình nhưng không có thông tin rõ ràng về nội dung chính. Tuy nhiên, đáp án B là một chủ đề thường được thảo luận trong các bài học về vật lý cơ bản và có thể phù hợp với chương trình giảng dạy hiện tại.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_009",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "[Chương 1] Chủ đề đầu tiên trong sách bắt đầu bằng...",
+      "options": [
+        "Đề tài A",
+        "Đề tài B",
+        "Đề tài C",
+        "Đề tài D"
+      ],
+      "correct_answer": "B",
+      "suggested_answer": null,
+      "explanation": "Theo thông tin được cung cấp, Chương 1 của tài liệu tập trung vào Đề tài B. Đây được coi là chủ đề đầu tiên trong sách.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_010",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương 1 của sách giáo trình, tác giả đã đề cập đến một khái niệm cơ bản nào dưới đây?",
+      "options": [
+        "Khái niệm A",
+        "Khái niệm B",
+        "Khái niệm C",
+        "Khái niệm D"
+      ],
+      "correct_answer": "B",
+      "suggested_answer": null,
+      "explanation": "Giải thích tại sao đáp án B đúng và các đáp án còn lại là sai trong tài liệu đã cung cấp.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_011",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "Trong chương 1 của sách giáo trình, nội dung nào sau đây được nêu rõ?",
+      "options": [
+        "A. Đặc điểm cơ bản của phân loại cây",
+        "B. Giải thích nguyên lý hoạt động của máy tính",
+        "C. Phương pháp chuẩn hóa mẫu trong hóa sinh",
+        "D. Cách thức lập kế hoạch quản trị"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Trong tài liệu được cung cấp, nội dung về đặc điểm cơ bản của phân loại cây là thông tin đầu tiên và quan trọng nhất trong chương 1.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_012",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "[CHƯƠNG 1] Bài học đầu tiên trong sách giáo khoa nói về...",
+      "options": [
+        "A - Các khái niệm cơ bản",
+        "B - Hệ thống các định lý",
+        "C - Lý thuyết về toán học",
+        "D - Phân loại động vật"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Trong chương 1, sách giáo khoa bắt đầu với việc giới thiệu các khái niệm cơ bản liên quan đến nội dung chương",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_013",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương đầu tiên của sách giáo trình, tác giả đã bắt đầu bằng...",
+      "options": [
+        "Giới thiệu về tác giả",
+        "Các khái niệm cơ bản của chương",
+        "Những ví dụ thực tế về chủ đề",
+        "Lý thuyết toán học cơ bản"
+      ],
+      "correct_answer": "B",
+      "suggested_answer": null,
+      "explanation": "Đáp án B là chính xác do tài liệu chỉ ra rằng chương đầu tiên tập trung vào các khái niệm cơ bản của chương.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_015",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "hieu",
+      "difficulty": "de",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương 1 của sách, tên của chương này là gì?",
+      "options": [
+        "Chương 2",
+        "Chương 3",
+        "Chương 1",
+        "Chương 4"
+      ],
+      "correct_answer": "C",
+      "suggested_answer": null,
+      "explanation": "Đáp án C chính xác nhất vì tài liệu chỉ đề cập đến chương đầu tiên với thông tin này.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_016",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung",
+      "difficulty": "trung_binh",
+      "statement": "[Nguồn: chunk_0000, trang 1] Chương 1 của tài liệu này bắt đầu bằng...",
+      "options": [
+        "Đáp án A",
+        "Đáp án B",
+        "Đáp án C",
+        "Đáp án D"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Giải thích tại sao đáp án A đúng dựa vào nội dung tài liệu",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_017",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung",
+      "difficulty": "trung_binh",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương 1 của tài liệu, đoạn nào sau đây được trình bày trước?",
+      "options": [
+        "Đáp án A: Định nghĩa và lý thuyết cơ bản",
+        "Đáp án B: Các ví dụ thực tế",
+        "Đáp án C: Lược đồ sơ lược về nội dung chương",
+        "Đáp án D: Các bước tiến bộ của lĩnh vực"
+      ],
+      "correct_answer": "C",
+      "suggested_answer": null,
+      "explanation": "Lưu ý rằng trong tài liệu, đoạn giới thiệu hoặc lược đồ sơ lược thường được trình bày ở đầu mỗi chương. Đây là thông tin có thể tìm thấy tại nguồn mà bạn đã cung cấp.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_018",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung",
+      "difficulty": "trung_binh",
+      "statement": "Trong chương 1 của sách giáo trình, đoạn văn đầu tiên đề cập đến...",
+      "options": [
+        "A: Các khái niệm cơ bản về chương",
+        "B: Giới thiệu các mục tiêu học tập",
+        "C: Mô tả phương pháp giảng dạy",
+        "D: Kết quả nghiên cứu gần đây"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Giải thích tại sao đáp án A là đúng dựa trên thông tin từ tài liệu",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_019",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung",
+      "difficulty": "trung_binh",
+      "statement": "Trong chương 1 của tài liệu, các kiến thức quan trọng liên quan đến...",
+      "options": [
+        "A. Các phép tính cơ bản",
+        "B. Lý thuyết về nhiệt độ",
+        "C. Nguyên tắc vật lý cơ bản",
+        "D. Hệ thống thông tin học"
+      ],
+      "correct_answer": "C",
+      "suggested_answer": null,
+      "explanation": "Giải thích tại sao đáp án C là đúng dựa vào nội dung của tài liệu nguồn, ví dụ: Tài liệu chỉ đề cập đến nguyên tắc vật lý cơ bản trong chương 1 và không nhắc đến các phép tính cơ bản hoặc hệ thống thông tin học.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_020",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung",
+      "difficulty": "trung_binh",
+      "statement": "Trong chương 1 của sách, tác giả đã đề cập đến lý thuyết cơ bản về vật lý nào?",
+      "options": [
+        "Lý thuyết nhiệt chuyển",
+        "Lý thuyết điện trường",
+        "Lý thuyết cơ giới học",
+        "Lý thuyết sóng"
+      ],
+      "correct_answer": "B",
+      "suggested_answer": null,
+      "explanation": "Trong tài liệu được cung cấp, tác giả đã đề cập đến lý thuyết điện trường trong chương đầu tiên. Vì vậy, đáp án B là chính xác.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_021",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung",
+      "difficulty": "trung_binh",
+      "statement": "[Nguồn: chunk_0000, trang 1] Trong chương đầu tiên, chúng ta được giới thiệu với thuật ngữ 'chunk' như một cấu trúc nhỏ trong học liệu.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "correct_answer": "A",
+      "suggested_answer": null,
+      "explanation": "Đáp án A đúng vì tài liệu đã chỉ rõ 'chunk' là một thuật ngữ được sử dụng trong chương đầu tiên của tài liệu. Các đáp án còn lại không liên quan đến thông tin trong đoạn văn bản.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_022",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung",
+      "difficulty": "trung_binh",
+      "statement": "[Trong chương 1 của sách này] Các định nghĩa chính về vật lý học được trình bày như thế nào?",
+      "options": [
+        "Đáp án A: Chỉ rõ ràng và đầy đủ",
+        "Đáp án B: Tùy chỉnh cho từng trường hợp cụ thể",
+        "Đáp án C: Khái lược nhưng bao quát",
+        "Đáp án D: Mông cương và không có liên hệ gì đến chủ đề"
+      ],
+      "correct_answer": "C",
+      "suggested_answer": null,
+      "explanation": "Chương 1 của sách này tập trung vào việc trình bày các định nghĩa chính về vật lý học một cách khái lược nhưng bao quát, giúp người đọc nắm bắt được bản chất cơ bản của vấn đề mà không cần đến những chi tiết cụ thể và phức tạp.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_023",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung_cao",
+      "difficulty": "kho",
+      "statement": "[CHƯƠNG 1] Phương trình ax + b = 0 với a, b là hai số nguyên khác 0 có nghiệm kép khi và chỉ khi:",
+      "options": [
+        "Đáp án A: a = 0",
+        "Đáp án B: a > 0",
+        "Đáp án C: a ≠ 0 và b = 0",
+        "Đáp án D: a ≠ 0 và b ≠ 0"
+      ],
+      "correct_answer": "D",
+      "suggested_answer": null,
+      "explanation": "Đáp án đúng là D. Phương trình ax + b = 0 có nghiệm kép khi hệ số a khác 0 (a ≠ 0) để đảm bảo phương trình có tính chất chung của các phương trình bậc nhất một ẩn. Tuy nhiên, số hạng b không ảnh hưởng đến điều kiện này vì bất kỳ giá trị nào của b đều cho phép phương trình có nghiệm kép.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    },
+    {
+      "question_id": "item_024",
+      "question_type": "mcq_single",
+      "topic_id": null,
+      "cognitive_level": "van_dung_cao",
+      "difficulty": "kho",
+      "statement": "Theo chương 1 của tài liệu, nguyên tắc quan trọng nhất liên quan đến phương pháp học tập là gì?",
+      "options": [
+        "Đáp án A: Nghiên cứu các chủ đề một cách cặn kẽ",
+        "Đáp án B: Thực hành tích lũy kiến thức thông qua việc giải quyết bài tập",
+        "Đáp án C: Đọc kỹ và ghi chú tất cả nội dung trong sách giáo khoa",
+        "Đáp án D: Học hỏi từ các nguồn thông tin đa dạng như mạng xã hội"
+      ],
+      "correct_answer": "B",
+      "suggested_answer": null,
+      "explanation": "Giải thích tại sao đáp án B là đúng dựa trên tài liệu đã cung cấp, mà ở đây giả định rằng tài liệu nhấn mạnh vào thực hành trong quá trình học tập.",
+      "rubric": null,
+      "source_trace": [
+        {
+          "chunk_id": "chunk_0000",
+          "page": 1,
+          "section": "CHƯƠNG 1: ..."
+        }
+      ],
+      "points": 0.25
+    }
+  ],
+  "created_at": "2026-01-28T01:21:21.932296"
+}
