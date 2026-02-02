@@ -23,6 +23,12 @@ const quizSchema = new mongoose.Schema({
     trim: true,
     maxlength: 1000
   },
+  quizType: {
+    type: String,
+    enum: ['practice', 'exam'],
+    default: 'practice',
+    required: true
+  },
   instructions: {
     type: String,
     maxlength: 2000
@@ -51,6 +57,11 @@ const quizSchema = new mongoose.Schema({
       type: String,
       required: true,
       maxlength: 1000
+    },
+    difficulty: {
+      type: String,
+      enum: ['easy', 'medium', 'hard'],
+      default: 'medium'
     },
     imageUrl: String,
     points: {

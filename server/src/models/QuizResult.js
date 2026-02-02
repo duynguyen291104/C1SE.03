@@ -62,6 +62,22 @@ const quizResultSchema = new mongoose.Schema({
   submittedAt: {
     type: Date,
     required: true
+  },
+  tabSwitchCount: {
+    type: Number,
+    default: 0
+  },
+  violations: [{
+    type: {
+      type: String,
+      enum: ['tab_switch', 'window_blur', 'copy_paste', 'right_click']
+    },
+    timestamp: Date,
+    details: String
+  }],
+  terminatedByViolation: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

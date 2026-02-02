@@ -18,12 +18,58 @@ const StudentQuizzes = () => {
   const [previousAttempts, setPreviousAttempts] = useState([]);
   const [showReview, setShowReview] = useState(false);
   const [reviewData, setReviewData] = useState(null);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [violations, setViolations] = useState([]);
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
   useEffect(() => {
     fetchQuizzes();
   }, []);
+
+  // Tab switching detection for exam mode
+  useEffect(() => {
+    if (!selectedQuiz || selectedQuiz.quizType !== 'exam' || showResult) {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        const newCount = tabSwitchCount + 1;
+        setTabSwitchCount(newCount);
+        
+        const violation = {
+          type: 'tab_switch',
+          timestamp: new Date(),
+          details: `Tab switched ${newCount} time(s)`
+        };
+        setViolations(prev => [...prev, violation]);
+
+        // Auto-submit if switched tabs
+        alert('⚠️ Bạn đã chuyển tab! Bài thi sẽ tự động nộp do vi phạm quy định.');
+        autoSubmitQuiz(true);
+      }
+    };
+
+    const handleBlur = () => {
+      if (selectedQuiz.quizType === 'exam') {
+        const violation = {
+          type: 'window_blur',
+          timestamp: new Date(),
+          details: 'Window lost focus'
+        };
+        setViolations(prev => [...prev, violation]);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [selectedQuiz, tabSwitchCount, showResult]);
 
   const fetchQuizzes = async () => {
     try {
@@ -70,6 +116,8 @@ const StudentQuizzes = () => {
       setStartTime(new Date());
       setShowResult(false);
       setQuizResult(null);
+      setTabSwitchCount(0);
+      setViolations([]);
     } catch (error) {
       setMessage({ text: 'Không thể tải bài kiểm tra', type: 'error' });
     }
@@ -94,16 +142,18 @@ const StudentQuizzes = () => {
     }
   };
 
-  const submitQuiz = async () => {
-    const unansweredCount = selectedQuiz.questions.filter(
-      (q) => !answers[q._id]
-    ).length;
+  const submitQuiz = async (isAutoSubmit = false) => {
+    if (!isAutoSubmit) {
+      const unansweredCount = selectedQuiz.questions.filter(
+        (q) => !answers[q._id]
+      ).length;
 
-    if (unansweredCount > 0) {
-      const confirm = window.confirm(
-        `Bạn chưa trả lời ${unansweredCount} câu hỏi. Bạn có chắc muốn nộp bài?`
-      );
-      if (!confirm) return;
+      if (unansweredCount > 0) {
+        const confirm = window.confirm(
+          `Bạn chưa trả lời ${unansweredCount} câu hỏi. Bạn có chắc muốn nộp bài?`
+        );
+        if (!confirm) return;
+      }
     }
 
     setIsSubmitting(true);
@@ -117,7 +167,10 @@ const StudentQuizzes = () => {
         { 
           answers,
           startedAt: startTime,
-          timeSpent
+          timeSpent,
+          tabSwitchCount,
+          violations,
+          terminatedByViolation: isAutoSubmit
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -134,6 +187,10 @@ const StudentQuizzes = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const autoSubmitQuiz = async (terminatedByViolation = false) => {
+    await submitQuiz(terminatedByViolation);
   };
 
   const exitQuiz = () => {

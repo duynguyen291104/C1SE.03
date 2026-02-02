@@ -29,6 +29,14 @@ const TeacherDashboard = () => {
 
       <div className="dashboard-grid">
         <div className="dashboard-card">
+          <h3>📊 Thống kê & Phân tích</h3>
+          <p>Xem thống kê câu hỏi sai và chủ đề yếu</p>
+          <Link to="/teacher/stats" className="btn btn-primary">
+            Xem thống kê
+          </Link>
+        </div>
+
+        <div className="dashboard-card">
           <h3>📊 Tạo Slide từ tài liệu</h3>
           <p>Upload file và tự động tạo slide bài giảng</p>
           <Link to="/teacher/create-slide" className="btn btn-primary">
@@ -58,13 +66,6 @@ const TeacherDashboard = () => {
           )}
         </div>
 
-        <div className="dashboard-card">
-          <h3>📚 Quản lý nội dung</h3>
-          <p>Xem và quản lý slides, quizzes đã tạo</p>
-          <Link to="/teacher/materials" className="btn btn-primary">
-            Quản lý
-          </Link>
-        </div>
       </div>
 
       <div className="info-section">

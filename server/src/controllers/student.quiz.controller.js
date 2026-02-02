@@ -106,7 +106,7 @@ exports.getQuizForTaking = async (req, res) => {
 // Submit quiz and get graded results
 exports.submitQuiz = async (req, res) => {
   try {
-    const { answers, timeSpent } = req.body;
+    const { answers, timeSpent, tabSwitchCount = 0, violations = [], terminatedByViolation = false } = req.body;
     const startedAt = req.body.startedAt ? new Date(req.body.startedAt) : new Date();
 
     // Get the full quiz with correct answers
@@ -130,6 +130,25 @@ exports.submitQuiz = async (req, res) => {
 
     const attemptNumber = existingAttempts.length + 1;
     const isFirstAttempt = attemptNumber === 1;
+    
+    // For exam type, check max attempts (only allow 1 attempt)
+    if (quiz.quizType === 'exam' && existingAttempts.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn đã hoàn thành bài thi này. Không được làm lại.'
+      });
+    }
+    
+    // For practice type, allow retakes only if score < 30
+    if (quiz.quizType === 'practice' && existingAttempts.length > 0) {
+      const lastAttempt = existingAttempts[0];
+      if (lastAttempt.score >= 30) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bạn đã đạt điểm cao hơn 3. Không cần làm lại.'
+        });
+      }
+    }
 
     // Grade the quiz
     let totalPoints = 0;
@@ -183,7 +202,10 @@ exports.submitQuiz = async (req, res) => {
       isFirstAttempt,
       timeSpent: timeSpent || 0,
       startedAt,
-      submittedAt: new Date()
+      submittedAt: new Date(),
+      tabSwitchCount,
+      violations,
+      terminatedByViolation
     });
 
     await AuditLog.log({
@@ -193,9 +215,31 @@ exports.submitQuiz = async (req, res) => {
         quizId: quiz._id, 
         score,
         attemptNumber,
-        isFirstAttempt
+        isFirstAttempt,
+        quizType: quiz.quizType,
+        tabSwitchCount,
+        terminatedByViolation
       }
     });
+    
+    // Determine message based on quiz type and score
+    let message = '';
+    let canRetake = false;
+    
+    if (quiz.quizType === 'exam') {
+      if (terminatedByViolation) {
+        message = '⚠️ Bài thi đã bị kết thúc do vi phạm quy định. Điểm số: ' + score + '%';
+      } else {
+        message = 'Bài thi của bạn đã được nộp. Điểm số: ' + score + '%';
+      }
+    } else { // practice
+      if (score < 30) {
+        message = `Điểm số: ${score}%. Bạn có thể làm lại để cải thiện kết quả.`;
+        canRetake = true;
+      } else {
+        message = `Điểm số: ${score}%. Chúc mừng bạn đã hoàn thành tốt!`;
+      }
+    }
 
     res.json({
       success: true,
@@ -207,9 +251,10 @@ exports.submitQuiz = async (req, res) => {
         passed,
         attemptNumber,
         isFirstAttempt,
-        message: isFirstAttempt 
-          ? 'Bài làm của bạn đã được lưu và chấm điểm!' 
-          : 'Bài luyện tập đã hoàn thành! Điểm chính thức vẫn giữ nguyên.'
+        quizType: quiz.quizType,
+        canRetake,
+        terminatedByViolation,
+        message
       }
     });
   } catch (error) {

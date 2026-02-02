@@ -68,7 +68,8 @@ app.use('/api/student/quizzes', require('./routes/student.quiz.routes'));
 app.use('/api/student/live-classes', require('./routes/student.liveClass.routes'));
 app.use('/api/live-classes', require('./routes/liveClass.routes'));
 app.use('/api/live-classes', require('./routes/liveClassApproval.routes')); // Approval API
-app.use('/api/materials', require('./routes/material.routes'));
+app.use('/api/teacher/stats', require('./routes/teacher.stats.routes'));
+app.use('/api/tutor', require('./routes/virtualTutor.routes'));
 
 // Error handling middleware
 app.use(errorHandler);

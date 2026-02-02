@@ -16,12 +16,13 @@ import StudentQuizzes from './pages/StudentQuizzes';
 import StudentMaterials from './pages/StudentMaterials';
 import StudentResults from './pages/StudentResults';
 import StudentLiveClasses from './pages/StudentLiveClasses';
+import VirtualTutor from './pages/VirtualTutor';
 
 // Teacher pages
 import CreateSlide from './pages/CreateSlide';
 import CreateQuiz from './pages/CreateQuiz';
 import CreateLive from './pages/CreateLive';
-import Materials from './pages/Materials';
+import TeacherStats from './pages/TeacherStats';
 import LiveClassRoom from './pages/LiveClassRoom';
 import JoinLiveClass from './pages/JoinLiveClass';
 import TestVideoGrid from './pages/TestVideoGrid';
@@ -103,6 +104,14 @@ function App() {
             }
           />
           <Route
+            path="/student/tutor"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <VirtualTutor />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/student/classes"
             element={
               <ProtectedRoute requiredRole="student">
@@ -145,18 +154,18 @@ function App() {
             }
           />
           <Route
-            path="/teacher/create-live"
+            path="/teacher/stats"
             element={
               <ProtectedRoute requiredRole="teacher">
-                <CreateLive />
+                <TeacherStats />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/teacher/materials"
+            path="/teacher/create-live"
             element={
               <ProtectedRoute requiredRole="teacher">
-                <Materials />
+                <CreateLive />
               </ProtectedRoute>
             }
           />

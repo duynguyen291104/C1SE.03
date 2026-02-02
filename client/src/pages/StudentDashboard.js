@@ -42,6 +42,14 @@ const StudentDashboard = () => {
             Xem kết quả
           </Link>
         </div>
+
+        <div className="dashboard-card">
+          <h3>🤖 Gia sư ảo</h3>
+          <p>Hỏi đáp thông minh dựa trên tài liệu</p>
+          <Link to="/student/tutor" className="btn btn-success">
+            Hỏi gia sư
+          </Link>
+        </div>
       </div>
 
       <div className="info-section">
