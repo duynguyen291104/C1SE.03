@@ -1,0 +1,168 @@
+name: Code Review Assistant
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    name: AI Code Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get changed files
+        id: changed-files
+        run: |
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt
+      
+      - name: Analyze code patterns
+        id: analyze
+        run: |
+          echo "🔍 Analyzing code patterns..."
+          
+          ISSUES=""
+          
+          # Check for console.log
+          if git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^\+.*console\.(log|debug|warn)' > /dev/null; then
+            ISSUES="$ISSUES\n⚠️ Found console.log statements - consider using proper logging"
+          fi
+          
+          # Check for TODO without issue reference
+          if git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^\+.*TODO' | grep -v '#[0-9]' > /dev/null; then
+            ISSUES="$ISSUES\n⚠️ Found TODO comments without issue reference"
+          fi
+          
+          # Check for hardcoded localhost
+          if git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^\+.*(localhost|127\.0\.0\.1)' | grep -v 'test\|spec\|\.md' > /dev/null; then
+            ISSUES="$ISSUES\n⚠️ Found hardcoded localhost - consider using environment variables"
+          fi
+          
+          # Check for missing error handling
+          if git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^\+.*await ' | head -10 > /dev/null; then
+            HAS_TRY_CATCH=$(git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^\+.*try\s*\{' | wc -l)
+            HAS_AWAIT=$(git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^\+.*await ' | wc -l)
+            if [ $HAS_AWAIT -gt 5 ] && [ $HAS_TRY_CATCH -eq 0 ]; then
+              ISSUES="$ISSUES\n⚠️ Multiple async operations without try-catch blocks"
+            fi
+          fi
+          
+          # Check for large functions (simple heuristic)
+          if git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- "*.js" "*.jsx" | grep -E '^\+' | wc -l | awk '$1 > 200 {exit 0} {exit 1}'; then
+            ISSUES="$ISSUES\n⚠️ Large code additions detected - consider breaking into smaller functions"
+          fi
+          
+          if [ -z "$ISSUES" ]; then
+            echo "✅ No common issues detected"
+            echo "issues=none" >> $GITHUB_OUTPUT
+          else
+            echo -e "$ISSUES"
+            echo "issues<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$ISSUES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Post review comment
+        if: steps.analyze.outputs.issues != 'none'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = `${{ steps.analyze.outputs.issues }}`;
+            
+            const comment = `## 🤖 Automated Code Review
+            
+### Potential Issues Detected:
+
+${issues}
+
+### Recommendations:
+- Remove debug console.log statements before merging
+- Add issue references to TODO comments (e.g., TODO #123)
+- Use environment variables for configuration
+- Add proper error handling for async operations
+- Consider refactoring large functions
+
+---
+*This is an automated review. Please review manually as well.*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  security-check:
+    name: Security Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check for secrets
+        run: |
+          echo "🔐 Checking for exposed secrets..."
+          
+          # Check for common secret patterns
+          if git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | \
+             grep -E '(password|secret|key|token|api_key).*[=:][[:space:]]*["\047][^"\047]{8,}'; then
+            echo "⚠️  WARNING: Potential secrets detected in diff!"
+            echo "Please review and use environment variables instead"
+          else
+            echo "✅ No obvious secrets detected"
+          fi
+      
+      - name: Check for sensitive files
+        run: |
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | \
+             grep -E '\.(pem|key|p12|pfx|env)$'; then
+            echo "❌ Sensitive files detected! These should not be committed"
+            exit 1
+          else
+            echo "✅ No sensitive file extensions detected"
+          fi
+
+  complexity-check:
+    name: Code Complexity
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+      
+      - name: Install complexity tool
+        run: npm install -g complexity-report
+      
+      - name: Analyze complexity
+        run: |
+          echo "📊 Analyzing code complexity..."
+          
+          # Get changed JS/JSX files
+          CHANGED_JS=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '\.(js|jsx)$' || true)
+          
+          if [ ! -z "$CHANGED_JS" ]; then
+            echo "Analyzing: $CHANGED_JS"
+            for file in $CHANGED_JS; do
+              if [ -f "$file" ]; then
+                echo "--- $file ---"
+                cr --format plain "$file" || echo "Could not analyze $file"
+              fi
+            done
+          else
+            echo "No JavaScript files changed"
+          fi

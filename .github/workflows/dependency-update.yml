@@ -1,0 +1,105 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-updates:
+    name: Check for Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+      
+      - name: Check Client Dependencies
+        working-directory: ./client
+        run: |
+          echo "📦 Checking client dependencies..."
+          npm outdated || true
+          echo ""
+      
+      - name: Check Server Dependencies
+        working-directory: ./server
+        run: |
+          echo "📦 Checking server dependencies..."
+          npm outdated || true
+      
+      - name: Check for security vulnerabilities
+        run: |
+          echo "🔒 Security Audit - Client"
+          cd client && npm audit --json > ../client-audit.json || true
+          cd ../server
+          echo "🔒 Security Audit - Server"
+          npm audit --json > ../server-audit.json || true
+      
+      - name: Create Issue if vulnerabilities found
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let hasVulnerabilities = false;
+            let issueBody = '## 🔒 Weekly Dependency Security Check\n\n';
+            
+            // Check client audit
+            try {
+              const clientAudit = JSON.parse(fs.readFileSync('client-audit.json', 'utf8'));
+              if (clientAudit.metadata && clientAudit.metadata.vulnerabilities) {
+                const vuln = clientAudit.metadata.vulnerabilities;
+                if (vuln.high > 0 || vuln.critical > 0) {
+                  hasVulnerabilities = true;
+                  issueBody += `### Client Dependencies\n`;
+                  issueBody += `- Critical: ${vuln.critical}\n`;
+                  issueBody += `- High: ${vuln.high}\n`;
+                  issueBody += `- Moderate: ${vuln.moderate}\n`;
+                  issueBody += `- Low: ${vuln.low}\n\n`;
+                }
+              }
+            } catch (e) {
+              console.log('Could not parse client audit');
+            }
+            
+            // Check server audit
+            try {
+              const serverAudit = JSON.parse(fs.readFileSync('server-audit.json', 'utf8'));
+              if (serverAudit.metadata && serverAudit.metadata.vulnerabilities) {
+                const vuln = serverAudit.metadata.vulnerabilities;
+                if (vuln.high > 0 || vuln.critical > 0) {
+                  hasVulnerabilities = true;
+                  issueBody += `### Server Dependencies\n`;
+                  issueBody += `- Critical: ${vuln.critical}\n`;
+                  issueBody += `- High: ${vuln.high}\n`;
+                  issueBody += `- Moderate: ${vuln.moderate}\n`;
+                  issueBody += `- Low: ${vuln.low}\n\n`;
+                }
+              }
+            } catch (e) {
+              console.log('Could not parse server audit');
+            }
+            
+            if (hasVulnerabilities) {
+              issueBody += `### Action Required\n`;
+              issueBody += `Please review and update dependencies:\n`;
+              issueBody += '```bash\n';
+              issueBody += 'cd client && npm audit fix\n';
+              issueBody += 'cd ../server && npm audit fix\n';
+              issueBody += '```\n\n';
+              issueBody += `---\n*Automated check by GitHub Actions*`;
+              
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔒 Security vulnerabilities detected in dependencies',
+                body: issueBody,
+                labels: ['security', 'dependencies']
+              });
+            }
