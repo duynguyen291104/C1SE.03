@@ -21,8 +21,8 @@ const JoinLiveClass = () => {
   const [liveClassId, setLiveClassId] = useState('');
   const [error, setError] = useState('');
   
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
-  const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
 
   useEffect(() => {
     return () => {

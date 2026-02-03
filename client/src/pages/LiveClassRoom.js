@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import useWebRTC from '../hooks/useWebRTC';
 import VideoGrid from '../components/VideoGrid';
+import WaitingRoomPanel from '../components/WaitingRoomPanel';
 import './LiveClassRoom.css';
 
 const LiveClassRoom = () => {
@@ -27,8 +28,8 @@ const LiveClassRoom = () => {
   // Ref to prevent joinToken from changing and causing socket reconnect
   const joinTokenRef = useRef('');
   
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
-  const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
 
   // WebRTC Hook - MUST be declared BEFORE using any of its values
   const {
@@ -68,6 +69,15 @@ const LiveClassRoom = () => {
       messages: webrtcMessages
     });
   }, [webrtcMessages]);
+
+  // Debug: log waiting students changes
+  useEffect(() => {
+    console.log('⏳ LiveClassRoom: waitingStudents updated:', {
+      count: waitingStudents.length,
+      students: waitingStudents,
+      isHost
+    });
+  }, [waitingStudents, isHost]);
 
   // ============ DEDUPLICATE PARTICIPANTS ============
   const uniqueParticipants = useMemo(() => {
@@ -541,40 +551,13 @@ const LiveClassRoom = () => {
             <button className="sidebar-close" onClick={() => setActivePanel(null)}>✕</button>
           </div>
           <div className="sidebar-content">
-            {waitingStudents.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-state-icon">⏳</div>
-                <div className="empty-state-text">Không có học sinh chờ duyệt</div>
-              </div>
-            ) : (
-              waitingStudents.map((student) => (
-                <div key={student.userId?.toString() || student.email} className="waiting-item">
-                  <div className="waiting-student-info">
-                    <span className="student-avatar">👨‍🎓</span>
-                    <div className="student-details">
-                      <span className="student-name">{student.fullName}</span>
-                      <span className="student-email">{student.email}</span>
-                    </div>
-                  </div>
-                  <div className="waiting-actions">
-                    <button 
-                      onClick={(e) => handleApproveStudent(e, student.userId?.toString())}
-                      className="btn-approve"
-                      disabled={approvingStudents.has(student.userId?.toString())}
-                    >
-                      {approvingStudents.has(student.userId?.toString()) ? '⏳' : '✅'} Duyệt
-                    </button>
-                    <button 
-                      onClick={(e) => handleRejectStudent(e, student.userId?.toString())}
-                      className="btn-reject"
-                      disabled={rejectingStudents.has(student.userId?.toString())}
-                    >
-                      {rejectingStudents.has(student.userId?.toString()) ? '⏳' : '❌'} Từ chối
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
+            <WaitingRoomPanel
+              waitingStudents={waitingStudents}
+              onApprove={(userId) => handleApproveStudent(null, userId)}
+              onReject={(userId) => handleRejectStudent(null, userId)}
+              approvingStudents={approvingStudents}
+              rejectingStudents={rejectingStudents}
+            />
           </div>
         </div>
       )}

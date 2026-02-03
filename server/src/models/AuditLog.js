@@ -21,7 +21,15 @@ const auditLogSchema = new mongoose.Schema({
       'BANNED_WORD_DELETED',
       'USER_DEACTIVATED',
       'PROFILE_UPDATED',
-      'ROLE_ASSIGNED'
+      'ROLE_ASSIGNED',
+      'CREATE_LIVE_CLASS',
+      'START_LIVE_CLASS',
+      'END_LIVE_CLASS',
+      'DELETE_LIVE_CLASS',
+      'JOIN_LIVE_CLASS',
+      'LEAVE_LIVE_CLASS',
+      'APPROVE_STUDENT',
+      'REJECT_STUDENT'
     ]
   },
   targetUserId: {
