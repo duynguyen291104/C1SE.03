@@ -1,12 +1,34 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+// HARDCODED for debugging - will use this if env var fails
+const HARDCODED_API_URL = 'http://localhost:5000/api';
+
+// Ensure we always have a valid API URL
+const API_URL = process.env.REACT_APP_API_URL || HARDCODED_API_URL;
+
+// Validate and fix API URL if needed
+const getValidApiUrl = (url) => {
+  if (!url) return HARDCODED_API_URL;
+  // If url doesn't start with http, it's invalid
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    console.error('❌ Invalid API URL:', url, '- Using hardcoded URL');
+    return HARDCODED_API_URL;
+  }
+  return url;
+};
+
+const FINAL_API_URL = getValidApiUrl(API_URL);
+
+console.log('🔌 FINAL API URL:', FINAL_API_URL);
+console.log('🔌 REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+console.log('🔌 All env vars:', Object.keys(process.env).filter(k => k.startsWith('REACT_APP_')));
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: FINAL_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000,
 });
 
 // Request interceptor - attach access token

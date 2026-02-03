@@ -54,7 +54,7 @@ const useWebRTC = (joinToken, iceServers = []) => {
   useEffect(() => {
     if (!joinToken) return;
 
-    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
     
     const newSocket = io(`${SOCKET_URL}/live`, {
       auth: { token: joinToken },
@@ -174,6 +174,8 @@ const useWebRTC = (joinToken, iceServers = []) => {
     });
 
     newSocket.on('room:student-waiting', ({ student, waitingList }) => {
+      console.log('� New student waiting:', student);
+      console.log('📋 Full waiting list:', waitingList);
       console.log('👨‍🎓 Student waiting:', student?.fullName);
       // Deduplicate by userId
       const uniqueMap = new Map();
@@ -183,7 +185,25 @@ const useWebRTC = (joinToken, iceServers = []) => {
           uniqueMap.set(key, s);
         }
       });
-      setWaitingStudents(Array.from(uniqueMap.values()));
+      const finalList = Array.from(uniqueMap.values());
+      console.log('✅ Setting waitingStudents to:', finalList);
+      setWaitingStudents(finalList);
+    });
+
+    newSocket.on('room:waiting-list-sync', ({ waitingStudents }) => {
+      console.log('🔄 Waiting list synced on join:', waitingStudents?.length || 0);
+      console.log('📋 Synced list:', waitingStudents);
+      // Deduplicate by userId
+      const uniqueMap = new Map();
+      (waitingStudents || []).forEach(s => {
+        if (s && (s.userId || s.email)) {
+          const key = s.userId?.toString() || s.email;
+          uniqueMap.set(key, s);
+        }
+      });
+      const finalList = Array.from(uniqueMap.values());
+      console.log('✅ Setting waitingStudents from sync to:', finalList);
+      setWaitingStudents(finalList);
     });
 
     newSocket.on('room:waiting-updated', ({ waitingStudents: updated }) => {
@@ -978,6 +998,17 @@ const useWebRTC = (joinToken, iceServers = []) => {
     
     // Emit with ACK callback (Socket.IO v4 syntax)
     console.log('📤 Emitting room:approve-student with studentUserId:', studentUserId);
+    console.log('   Socket connected?', socketRef.current?.connected);
+    console.log('   Socket id:', socketRef.current?.id);
+    console.log('   Current room:', roomIdRef.current);
+    
+    if (!socketRef.current || !socketRef.current.connected) {
+      console.error('❌ Socket not connected! Cannot emit approval.');
+      approvingRef.current.delete(studentUserId);
+      setError('Mất kết nối với server. Vui lòng tải lại trang.');
+      return;
+    }
+    
     socketRef.current.emit(
       'room:approve-student',
       { studentUserId },

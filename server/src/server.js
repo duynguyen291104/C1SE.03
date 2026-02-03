@@ -19,9 +19,16 @@ const app = express();
 const server = http.createServer(app);
 
 // Initialize Socket.IO with CORS
+const allowedSocketOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001', 
+  'http://localhost:3002',
+  process.env.CORS_ORIGIN || 'http://localhost:3000'
+].filter(Boolean);
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: allowedSocketOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -41,10 +48,30 @@ connectDB();
 
 // Middleware
 app.use(helmet());
+
+// CORS configuration - allow multiple origins for development
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  process.env.CORS_ORIGIN
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      callback(null, false);
+    }
+  },
   credentials: true
 }));
+
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

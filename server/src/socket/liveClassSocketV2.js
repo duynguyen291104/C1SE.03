@@ -107,9 +107,27 @@ const joinRoomDirectly = async (socket, liveClass, roomId, liveClassId, presence
     })),
     isHost,
     isTeacher: socket.user.role === 'teacher',
-    mediaStates,
-    waitingStudents: isHost ? liveClass.waitingStudents : [] // Chỉ host mới thấy waiting list
+    mediaStates
   });
+
+  // 5.5) If host, send current waiting list
+  if (isHost) {
+    try {
+      const waitingList = await LiveRoomWaiting.getWaitingList(roomId);
+      console.log(`📋 Sending waiting list to host: ${waitingList.length} students`);
+      socket.emit('room:waiting-list-sync', {
+        waitingStudents: waitingList.map(w => ({
+          userId: w.studentId._id || w.studentId,
+          fullName: w.fullName,
+          email: w.email,
+          avatar: w.avatar,
+          requestedAt: w.requestedAt
+        }))
+      });
+    } catch (err) {
+      console.error('Error fetching waiting list:', err);
+    }
+  }
 
   // 6) Broadcast to other participants (critical for UI sync)
   socket.to(roomId).emit('room:user-joined', {

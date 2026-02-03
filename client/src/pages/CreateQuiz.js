@@ -21,7 +21,7 @@ const CreateQuiz = () => {
   const [editMode, setEditMode] = useState(false);
   const [editingQuizId, setEditingQuizId] = useState(null);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchQuizzes();
